@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Message, ToolCall, ChartSpec } from '../lib/types';
+import { Message, ToolCall, ChartSpec, DownloadFile, ConfirmAction } from '../lib/types';
 import {
   PROVIDER_CONFIG,
   DEFAULT_PROVIDER,
@@ -8,12 +8,19 @@ import {
 import MessageBubble from './MessageBubble';
 import QuickActions from './QuickActions';
 
+interface ChatBody {
+  messages?: Array<{ role: 'user' | 'assistant'; content: string }>;
+  provider?: ProviderId;
+  model?: string;
+  approvedActions?: Array<{ id: string; name: string; input: Record<string, unknown> }>;
+}
+
 export default function ChatInterface() {
   const [messages, setMessages] = useState<Message[]>([
     {
       role: 'assistant',
       content:
-        '👋 Ciao! Sono il tuo assistente HubSpot via MCP.\n\nPosso:\n• 💰 Leggere e creare deal, contatti, note\n• 📊 Generare grafici in tempo reale (pipeline, forecast incassi, lead)\n\nProva: "Mostrami la pipeline 2026" oppure "Incassi previsti questo mese".',
+        '👋 Ciao! Sono il tuo assistente HubSpot via MCP.\n\nPosso:\n• 💰 Leggere e creare deal, contatti, note (con conferma prima di scrivere)\n• 📊 Generare grafici in tempo reale\n• 📄 Esportare report Excel scaricabili\n\nProva: "Mostrami la pipeline 2026" o "Esporta i deal aperti in Excel".',
     },
   ]);
   const [input, setInput] = useState('');
@@ -31,6 +38,120 @@ export default function ChatInterface() {
     setModel(PROVIDER_CONFIG[p].defaultModel);
   };
 
+  // Esegue una richiesta SSE e aggiorna il messaggio assistente all'indice dato.
+  const streamChat = async (assistantIdx: number, body: ChatBody) => {
+    const res = await fetch('/api/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+    if (!res.ok) {
+      let detail = `HTTP ${res.status}`;
+      try {
+        const j = await res.json();
+        if (j?.error) detail = j.error;
+      } catch {
+        /* ignore */
+      }
+      throw new Error(detail);
+    }
+    if (!res.body) throw new Error('Nessuno stream di risposta');
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    const currentToolCalls: ToolCall[] = [];
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const data = JSON.parse(line.slice(6));
+
+        if (data.type === 'tool_call') {
+          currentToolCalls.push({
+            id: data.toolCall.id,
+            name: data.toolCall.name,
+            input: data.toolCall.input,
+          });
+          setMessages((prev) => {
+            const next = [...prev];
+            next[assistantIdx] = { ...next[assistantIdx], toolCalls: [...currentToolCalls] };
+            return next;
+          });
+        }
+
+        if (data.type === 'tool_result') {
+          setMessages((prev) => {
+            const next = [...prev];
+            const tc = (next[assistantIdx].toolCalls || []).find((t) => t.id === data.id);
+            if (tc) tc.result = data.result;
+            return [...next];
+          });
+        }
+
+        if (data.type === 'chart') {
+          const spec = data.chart as ChartSpec;
+          setMessages((prev) => {
+            const next = [...prev];
+            const existing = next[assistantIdx].charts || [];
+            next[assistantIdx] = { ...next[assistantIdx], charts: [...existing, spec] };
+            return next;
+          });
+        }
+
+        if (data.type === 'file') {
+          const file = data.file as DownloadFile;
+          setMessages((prev) => {
+            const next = [...prev];
+            const existing = next[assistantIdx].files || [];
+            next[assistantIdx] = { ...next[assistantIdx], files: [...existing, file] };
+            return next;
+          });
+        }
+
+        if (data.type === 'confirm_required') {
+          const actions = data.actions as ConfirmAction[];
+          setMessages((prev) => {
+            const next = [...prev];
+            next[assistantIdx] = {
+              ...next[assistantIdx],
+              pendingConfirm: { actions, status: 'pending' },
+            };
+            return next;
+          });
+        }
+
+        if (data.type === 'text') {
+          setMessages((prev) => {
+            const next = [...prev];
+            next[assistantIdx] = { ...next[assistantIdx], content: data.text };
+            return next;
+          });
+        }
+
+        if (data.type === 'error') {
+          setMessages((prev) => {
+            const next = [...prev];
+            next[assistantIdx] = {
+              ...next[assistantIdx],
+              content: `⚠️ Errore: ${data.message}`,
+              isError: true,
+            };
+            return next;
+          });
+        }
+      }
+    }
+  };
+
   const sendMessage = async (text?: string) => {
     const msgText = (text || input).trim();
     if (!msgText || loading) return;
@@ -41,115 +162,15 @@ export default function ChatInterface() {
     setInput('');
     setLoading(true);
 
-    // Placeholder per l'assistente.
     const assistantIdx = updatedMessages.length;
-    setMessages((prev) => [
-      ...prev,
-      { role: 'assistant', content: '', toolCalls: [], charts: [] },
-    ]);
+    setMessages((prev) => [...prev, { role: 'assistant', content: '' }]);
 
     try {
-      const res = await fetch('/api/chat/completions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: updatedMessages.map((m) => ({ role: m.role, content: m.content })),
-          provider,
-          model,
-        }),
+      await streamChat(assistantIdx, {
+        messages: updatedMessages.map((m) => ({ role: m.role, content: m.content })),
+        provider,
+        model,
       });
-
-      if (!res.ok) {
-        let detail = `HTTP ${res.status}`;
-        try {
-          const j = await res.json();
-          if (j?.error) detail = j.error;
-        } catch {
-          /* ignore */
-        }
-        throw new Error(detail);
-      }
-      if (!res.body) throw new Error('Nessuno stream di risposta');
-
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-      const currentToolCalls: ToolCall[] = [];
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n\n');
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue;
-          const data = JSON.parse(line.slice(6));
-
-          if (data.type === 'tool_call') {
-            currentToolCalls.push({
-              id: data.toolCall.id,
-              name: data.toolCall.name,
-              input: data.toolCall.input,
-            });
-            setMessages((prev) => {
-              const next = [...prev];
-              next[assistantIdx] = {
-                ...next[assistantIdx],
-                toolCalls: [...currentToolCalls],
-              };
-              return next;
-            });
-          }
-
-          if (data.type === 'tool_result') {
-            setMessages((prev) => {
-              const next = [...prev];
-              const tc = (next[assistantIdx].toolCalls || []).find((t) => t.id === data.id);
-              if (tc) tc.result = data.result;
-              return [...next];
-            });
-          }
-
-          if (data.type === 'chart') {
-            const spec = data.chart as ChartSpec;
-            setMessages((prev) => {
-              const next = [...prev];
-              const existing = next[assistantIdx].charts || [];
-              next[assistantIdx] = {
-                ...next[assistantIdx],
-                charts: [...existing, spec],
-              };
-              return next;
-            });
-          }
-
-          if (data.type === 'text') {
-            setMessages((prev) => {
-              const next = [...prev];
-              next[assistantIdx] = {
-                ...next[assistantIdx],
-                content: data.text,
-              };
-              return next;
-            });
-          }
-
-          if (data.type === 'error') {
-            setMessages((prev) => {
-              const next = [...prev];
-              next[assistantIdx] = {
-                ...next[assistantIdx],
-                content: `⚠️ Errore: ${data.message}`,
-                isError: true,
-              };
-              return next;
-            });
-          }
-        }
-      }
     } catch (err) {
       setMessages((prev) => {
         const next = [...prev];
@@ -163,6 +184,59 @@ export default function ChatInterface() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const confirmMessage = async (i: number) => {
+    if (loading) return;
+    const pc = messages[i].pendingConfirm;
+    if (!pc || pc.status !== 'pending') return;
+
+    setMessages((prev) => {
+      const next = [...prev];
+      const cur = next[i].pendingConfirm;
+      if (cur) next[i] = { ...next[i], pendingConfirm: { ...cur, status: 'confirmed' } };
+      return next;
+    });
+
+    setLoading(true);
+    const assistantIdx = messages.length;
+    setMessages((prev) => [...prev, { role: 'assistant', content: '' }]);
+
+    try {
+      await streamChat(assistantIdx, {
+        approvedActions: pc.actions.map((a) => ({ id: a.id, name: a.name, input: a.input })),
+        provider,
+        model,
+      });
+    } catch (err) {
+      setMessages((prev) => {
+        const next = [...prev];
+        next[assistantIdx] = {
+          ...next[assistantIdx],
+          content: `⚠️ Errore: ${String(err)}`,
+          isError: true,
+        };
+        return next;
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const cancelMessage = (i: number) => {
+    if (loading) return;
+    setMessages((prev) => {
+      const next = [...prev];
+      const cur = next[i].pendingConfirm;
+      if (cur) next[i] = { ...next[i], pendingConfirm: { ...cur, status: 'cancelled' } };
+      return [
+        ...next,
+        {
+          role: 'assistant',
+          content: '✖ Operazione annullata. Nessuna modifica è stata apportata a HubSpot.',
+        },
+      ];
+    });
   };
 
   return (
@@ -225,7 +299,13 @@ export default function ChatInterface() {
         {/* Messages */}
         <div className="flex-1 overflow-y-auto p-6 space-y-4">
           {messages.map((msg, i) => (
-            <MessageBubble key={i} message={msg} />
+            <MessageBubble
+              key={i}
+              message={msg}
+              disabled={loading}
+              onConfirm={() => confirmMessage(i)}
+              onCancel={() => cancelMessage(i)}
+            />
           ))}
           {loading && (
             <div className="flex items-end gap-2">

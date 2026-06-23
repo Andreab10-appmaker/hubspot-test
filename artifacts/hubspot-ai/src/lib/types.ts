@@ -23,11 +23,32 @@ export interface ChartSpec {
   yLabel?: string;
 }
 
+export interface ConfirmAction {
+  id: string;
+  name: string;
+  title: string;
+  input: Record<string, unknown>;
+}
+
+export interface PendingConfirm {
+  actions: ConfirmAction[];
+  status: 'pending' | 'confirmed' | 'cancelled';
+}
+
+export interface DownloadFile {
+  id: string;
+  name: string;
+  mimeType: string;
+  dataBase64: string;
+}
+
 export interface Message {
   role: 'user' | 'assistant';
   content: string;
   toolCalls?: ToolCall[];
   charts?: ChartSpec[];
+  files?: DownloadFile[];
+  pendingConfirm?: PendingConfirm;
   isError?: boolean;
 }
 

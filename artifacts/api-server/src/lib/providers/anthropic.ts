@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { RunOptions, executeTool, CHART_TOOL_NAME } from './shared.js';
+import { RunOptions, executeTool, OUTPUT_TOOLS, isWriteTool, buildAction } from './shared.js';
 
 export async function runAnthropic({ model, system, messages, tools, send }: RunOptions): Promise<void> {
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -35,36 +35,50 @@ export async function runAnthropic({ model, system, messages, tools, send }: Run
       .join('\n')
       .trim();
 
-    if (res.stop_reason === 'tool_use' && toolUses.length > 0) {
-      if (turnText) buffered += (buffered ? '\n' : '') + turnText;
-      conv.push({ role: 'assistant', content: res.content });
-
-      const results: Anthropic.ToolResultBlockParam[] = [];
-      for (const tu of toolUses) {
-        if (tu.name !== CHART_TOOL_NAME) {
-          send({ type: 'tool_call', toolCall: { id: tu.id, name: tu.name, input: tu.input } });
-          send({ type: 'tool_executing', name: tu.name });
-        }
-
-        const { content, isError } = await executeTool(
-          tu.name,
-          tu.input as Record<string, unknown>,
-          tu.id,
-          send
-        );
-
-        if (tu.name !== CHART_TOOL_NAME) {
-          send({ type: 'tool_result', id: tu.id, result: content });
-        }
-        results.push({ type: 'tool_result', tool_use_id: tu.id, content, is_error: isError });
-      }
-
-      conv.push({ role: 'user', content: results });
-      continue;
+    if (res.stop_reason !== 'tool_use' || toolUses.length === 0) {
+      send({ type: 'text', text: turnText || buffered || 'Operazione completata.' });
+      return;
     }
 
-    send({ type: 'text', text: turnText || buffered || 'Operazione completata.' });
-    return;
+    // Gating: se ci sono tool di SCRITTURA, proponi e chiedi conferma all'utente.
+    const writeUses = toolUses.filter((tu) => isWriteTool(tu.name));
+    if (writeUses.length > 0) {
+      const proposal = (turnText || buffered || '').trim();
+      if (proposal) send({ type: 'text', text: proposal });
+      send({
+        type: 'confirm_required',
+        actions: writeUses.map((tu) =>
+          buildAction(tu.id, tu.name, tu.input as Record<string, unknown>)
+        ),
+      });
+      return;
+    }
+
+    // Solo letture / output (grafici, excel): esegui e continua.
+    if (turnText) buffered += (buffered ? '\n' : '') + turnText;
+    conv.push({ role: 'assistant', content: res.content });
+
+    const results: Anthropic.ToolResultBlockParam[] = [];
+    for (const tu of toolUses) {
+      if (!OUTPUT_TOOLS.has(tu.name)) {
+        send({ type: 'tool_call', toolCall: { id: tu.id, name: tu.name, input: tu.input } });
+        send({ type: 'tool_executing', name: tu.name });
+      }
+
+      const { content, isError } = await executeTool(
+        tu.name,
+        tu.input as Record<string, unknown>,
+        tu.id,
+        send
+      );
+
+      if (!OUTPUT_TOOLS.has(tu.name)) {
+        send({ type: 'tool_result', id: tu.id, result: content });
+      }
+      results.push({ type: 'tool_result', tool_use_id: tu.id, content, is_error: isError });
+    }
+
+    conv.push({ role: 'user', content: results });
   }
 
   send({
