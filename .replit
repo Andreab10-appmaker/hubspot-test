@@ -1,0 +1,28 @@
+# Configurazione Replit per il progetto Next.js + HubSpot MCP.
+# In sviluppo (pulsante "Run") avvia il dev server su 0.0.0.0 così la webview
+# di Replit può raggiungerlo. Il deploy usa build + start.
+
+run = "npm run dev"
+entrypoint = "app/page.tsx"
+
+[nix]
+channel = "stable-24_05"
+
+[env]
+# Next.js legge automaticamente la variabile PORT.
+NEXT_TELEMETRY_DISABLED = "1"
+
+# I Secret (ANTHROPIC_API_KEY, HUBSPOT_ACCESS_TOKEN) vanno impostati nella tab
+# "Secrets" di Replit — NON qui (questo file viene committato su git).
+
+[deployment]
+# Per la demo è consigliata una "Reserved VM" (always-on): il server MCP gira
+# come processo figlio persistente. Su "Autoscale" funziona comunque, ma a ogni
+# cold start il processo MCP viene riavviato (prima richiesta più lenta).
+deploymentTarget = "autoscale"
+build = ["sh", "-c", "npm install && npm run build"]
+run = ["sh", "-c", "npm run start"]
+
+[[ports]]
+localPort = 3000
+externalPort = 80
