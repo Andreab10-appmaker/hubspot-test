@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "HubSpot AI Interface"
+version = "1.0.0"
+id = "artifacts/hubspot-ai"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 18803
+
+[services.development]
+run = "pnpm --filter @workspace/hubspot-ai run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/hubspot-ai", "run", "build" ]
+publicDir = "artifacts/hubspot-ai/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "18803"
+BASE_PATH = "/"
