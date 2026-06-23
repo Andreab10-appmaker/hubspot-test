@@ -27,6 +27,7 @@ export default function ChatInterface() {
   const [loading, setLoading] = useState(false);
   const [provider, setProvider] = useState<ProviderId>(DEFAULT_PROVIDER);
   const [model, setModel] = useState<string>(PROVIDER_CONFIG[DEFAULT_PROVIDER].defaultModel);
+  const [customModel, setCustomModel] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -36,6 +37,7 @@ export default function ChatInterface() {
   const changeProvider = (p: ProviderId) => {
     setProvider(p);
     setModel(PROVIDER_CONFIG[p].defaultModel);
+    setCustomModel(false);
   };
 
   // Esegue una richiesta SSE e aggiorna il messaggio assistente all'indice dato.
@@ -279,20 +281,40 @@ export default function ChatInterface() {
                 </option>
               ))}
             </select>
-            <input
-              list="model-list"
-              value={model}
-              onChange={(e) => setModel(e.target.value)}
+            <select
+              value={customModel ? '__custom__' : model}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (v === '__custom__') {
+                  setCustomModel(true);
+                } else {
+                  setCustomModel(false);
+                  setModel(v);
+                }
+              }}
               disabled={loading}
-              placeholder="modello"
-              title="Modello (puoi digitarne uno custom)"
-              className="bg-white/10 text-white text-[11px] rounded-md px-2 py-1 w-36 outline-none border border-white/20 placeholder-white/50 disabled:opacity-50"
-            />
-            <datalist id="model-list">
+              title="Modello"
+              className="bg-white/10 text-white text-[11px] rounded-md px-2 py-1 outline-none border border-white/20 disabled:opacity-50 max-w-[160px]"
+            >
               {PROVIDER_CONFIG[provider].models.map((m) => (
-                <option key={m} value={m} />
+                <option key={m} value={m} className="text-black">
+                  {m}
+                </option>
               ))}
-            </datalist>
+              <option value="__custom__" className="text-black">
+                ✏️ Personalizzato…
+              </option>
+            </select>
+            {customModel && (
+              <input
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+                disabled={loading}
+                placeholder="ID modello"
+                title="Inserisci un ID modello custom"
+                className="bg-white/10 text-white text-[11px] rounded-md px-2 py-1 w-32 outline-none border border-white/20 placeholder-white/50 disabled:opacity-50"
+              />
+            )}
           </div>
         </header>
 
