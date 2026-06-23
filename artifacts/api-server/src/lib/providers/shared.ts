@@ -1,5 +1,8 @@
 import { callMCPTool } from '../mcp-client.js';
 import { generateExcel, type ExcelSpec } from '../excel.js';
+import { generateCsv, type CsvSpec } from '../csv.js';
+import { generatePdf, type PdfSpec } from '../pdf.js';
+import { generatePptx, type PptxSpec } from '../pptx.js';
 import { logger } from '../logger.js';
 
 export type SendFn = (data: object) => void;
@@ -20,9 +23,18 @@ export interface RunOptions {
 
 export const CHART_TOOL_NAME = 'render_chart';
 export const EXCEL_TOOL_NAME = 'create_excel';
+export const CSV_TOOL_NAME = 'create_csv';
+export const PDF_TOOL_NAME = 'create_pdf';
+export const PPTX_TOOL_NAME = 'create_pptx';
 
 // Tool di "output": non modificano il CRM e non passano dalla conferma.
-export const OUTPUT_TOOLS = new Set<string>([CHART_TOOL_NAME, EXCEL_TOOL_NAME]);
+export const OUTPUT_TOOLS = new Set<string>([
+  CHART_TOOL_NAME,
+  EXCEL_TOOL_NAME,
+  CSV_TOOL_NAME,
+  PDF_TOOL_NAME,
+  PPTX_TOOL_NAME,
+]);
 
 export const CHART_TOOL: NormalizedTool = {
   name: CHART_TOOL_NAME,
@@ -128,6 +140,110 @@ export const EXCEL_TOOL: NormalizedTool = {
   },
 };
 
+export const CSV_TOOL: NormalizedTool = {
+  name: CSV_TOOL_NAME,
+  description:
+    'Genera un file CSV scaricabile (separatore virgola, UTF-8). Usalo quando ' +
+    "l'utente vuole i dati grezzi/tabellari da reimportare altrove o aprire in " +
+    'Excel. Recupera prima i dati reali da HubSpot (o usa quelli in conversazione).',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      filename: { type: 'string', description: "Nome file SENZA estensione, es. 'contatti'." },
+      headers: {
+        type: 'array',
+        description: 'Intestazioni di colonna (opzionale ma consigliato).',
+        items: { type: 'string' },
+      },
+      rows: {
+        type: 'array',
+        description: 'Righe: ogni riga è un array di celle (stringa o numero).',
+        items: { type: 'array' },
+      },
+    },
+    required: ['filename', 'rows'],
+  },
+};
+
+export const PDF_TOOL: NormalizedTool = {
+  name: PDF_TOOL_NAME,
+  description:
+    'Genera un report PDF scaricabile e ben formattato (titolo, tabella con ' +
+    'intestazione evidenziata, righe a zebra, totali in grassetto). Usalo quando ' +
+    "l'utente chiede un report/PDF stampabile. Una riga la cui prima cella contiene " +
+    '"TOTALE" viene evidenziata. Recupera prima i dati reali da HubSpot o usa quelli ' +
+    'già presenti in conversazione.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      filename: { type: 'string', description: "Nome file SENZA estensione, es. 'report-pipeline'." },
+      title: { type: 'string', description: 'Titolo del report (opzionale).' },
+      subtitle: { type: 'string', description: 'Sottotitolo, es. periodo (opzionale).' },
+      columns: {
+        type: 'array',
+        description: 'Colonne in ordine.',
+        items: {
+          type: 'object',
+          properties: {
+            header: { type: 'string', description: 'Intestazione colonna.' },
+            align: { type: 'string', enum: ['left', 'right', 'center'], description: "Allineamento (numeri: 'right')." },
+            width: { type: 'number', description: 'Larghezza in punti (opzionale).' },
+          },
+          required: ['header'],
+        },
+      },
+      rows: {
+        type: 'array',
+        description: 'Righe: ogni riga è un array di celle (stringa o numero) nello stesso ordine delle colonne.',
+        items: { type: 'array' },
+      },
+    },
+    required: ['filename', 'columns', 'rows'],
+  },
+};
+
+export const PPTX_TOOL: NormalizedTool = {
+  name: PPTX_TOOL_NAME,
+  description:
+    'Genera una presentazione PowerPoint (.pptx) scaricabile e formattata. Usala ' +
+    "quando l'utente chiede una presentazione/slide/deck. Ogni slide può avere " +
+    'titolo, elenco puntato e/o una tabella. Recupera prima i dati reali da HubSpot ' +
+    'o usa quelli già in conversazione.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      filename: { type: 'string', description: "Nome file SENZA estensione, es. 'review-q1'." },
+      title: { type: 'string', description: 'Titolo della slide di copertina (opzionale).' },
+      subtitle: { type: 'string', description: 'Sottotitolo di copertina (opzionale).' },
+      slides: {
+        type: 'array',
+        description: 'Le slide di contenuto.',
+        items: {
+          type: 'object',
+          properties: {
+            title: { type: 'string', description: 'Titolo della slide.' },
+            bullets: {
+              type: 'array',
+              description: 'Punti elenco (opzionale).',
+              items: { type: 'string' },
+            },
+            table: {
+              type: 'object',
+              description: 'Tabella opzionale nella slide.',
+              properties: {
+                columns: { type: 'array', items: { type: 'string' }, description: 'Intestazioni.' },
+                rows: { type: 'array', items: { type: 'array' }, description: 'Righe (array di celle).' },
+              },
+              required: ['columns', 'rows'],
+            },
+          },
+        },
+      },
+    },
+    required: ['filename', 'slides'],
+  },
+};
+
 // Riconosce i tool di SCRITTURA (mutano il CRM) da gating con conferma utente.
 export function isWriteTool(name: string): boolean {
   if (OUTPUT_TOOLS.has(name)) return false;
@@ -198,16 +314,21 @@ distribuzioni). NON inventare numeri: recupera prima i dati reali da HubSpot,
 aggrega e poi passa i valori. line/area per serie temporali, bar per confronti,
 pie per composizioni. valueFormat "currency" per €, "percent" per percentuali.
 
-EXPORT EXCEL (.xlsx):
-Hai il tool "create_excel" per generare file Excel scaricabili. REGOLA FERREA: se
-l'utente chiede di "esportare", "scaricare", qualcosa "in excel"/"in xlsx", un
-"foglio di calcolo" o un "report" tabellare, DEVI chiamare create_excel — non
-limitarti a elencare i dati nel testo. Preferisci dati reali da HubSpot; se il CRM
-non è disponibile, usa i dati già presenti in conversazione o forniti dall'utente,
-senza bloccarti. Best practice (skill xlsx): intestazioni chiare, un numberFormat
-adeguato per colonna (€, %, date), e FORMULE Excel reali (celle che iniziano con
-'=') per ogni totale o aggregato — mai valori calcolati a mano. Usa più fogli se
-utile. Dopo la generazione, accompagna con un breve commento testuale.
+EXPORT E FILE SCARICABILI:
+Hai tool che generano file scaricabili mostrati come pulsante di download:
+- create_excel → foglio Excel (.xlsx) con formule e formati
+- create_csv → dati grezzi tabellari (.csv)
+- create_pdf → report PDF stampabile (titolo + tabella formattata)
+- create_pptx → presentazione PowerPoint (.pptx) con slide, elenchi e tabelle
+REGOLA FERREA: se l'utente chiede di "esportare", "scaricare", un file, un report,
+un foglio di calcolo, un PDF o una presentazione, DEVI chiamare il tool adatto — non
+limitarti a elencare i dati nel testo. Scegli il formato dall'intento: "excel/foglio"
+→ create_excel; "csv/dati grezzi" → create_csv; "report/pdf/stampabile" → create_pdf;
+"presentazione/slide/deck" → create_pptx. Preferisci dati reali da HubSpot; se il CRM
+non è disponibile, usa i dati già in conversazione o forniti dall'utente, senza
+bloccarti. Per Excel: intestazioni chiare, numberFormat adeguato (€, %, date) e
+FORMULE reali (celle che iniziano con '=') per i totali, mai calcolati a mano. Dopo
+la generazione, accompagna sempre con un breve commento testuale.
 
 Linee guida generali:
 - Deal: nome, valore (€), fase, proprietario, data chiusura
@@ -217,7 +338,9 @@ Linee guida generali:
 - Conferma esplicitamente quando un'operazione di scrittura va a buon fine
 - Suggerisci sempre possibili azioni successive`;
 
-export function buildSystemPrompt(mcpAvailable = true): string {
+export type AgentMode = 'build' | 'plan';
+
+export function buildSystemPrompt(mcpAvailable = true, mode: AgentMode = 'build'): string {
   const today = new Date().toLocaleDateString('it-IT', {
     weekday: 'long',
     year: 'numeric',
@@ -226,15 +349,65 @@ export function buildSystemPrompt(mcpAvailable = true): string {
     timeZone: 'Europe/Rome',
   });
   let prompt = `${SYSTEM_BASE}\n\nData odierna: ${today} (fuso Europe/Rome).`;
+  if (mode === 'plan') {
+    prompt +=
+      `\n\nMODALITÀ PIANO (SOLA LETTURA): sei in modalità di analisi. NON modificare ` +
+      `il CRM: niente creazioni, modifiche, eliminazioni o associazioni (i tool di ` +
+      `scrittura sono disabilitati). Limitati a LEGGERE i dati, analizzarli e proporre ` +
+      `un piano d'azione chiaro e concreto (cosa faresti, su quali oggetti e perché), ` +
+      `con eventuali grafici o file di supporto. Concludi indicando che, per eseguire, ` +
+      `l'utente può passare alla modalità Operativa.`;
+  }
   if (!mcpAvailable) {
     prompt +=
       `\n\nATTENZIONE: la connessione a HubSpot (MCP) NON è al momento disponibile. ` +
-      `Puoi comunque generare GRAFICI (render_chart) ed EXCEL (create_excel) a ` +
-      `partire dai dati forniti dall'utente o già presenti nella conversazione. Se ` +
-      `per rispondere servono dati dal CRM, spiega che HubSpot non è raggiungibile e ` +
+      `Puoi comunque generare GRAFICI ed EXPORT (Excel/CSV/PDF/PowerPoint) a partire ` +
+      `dai dati forniti dall'utente o già presenti nella conversazione. Se per ` +
+      `rispondere servono dati dal CRM, spiega che HubSpot non è raggiungibile e ` +
       `invita l'utente a verificare il token di accesso — non inventare numeri.`;
   }
   return prompt;
+}
+
+// Registro estensibile dei generatori di file scaricabili (Excel/CSV/PDF/PPTX).
+// Aggiungere un nuovo formato = aggiungere una voce qui + il NormalizedTool sopra.
+interface FileGenerator {
+  ext: string;
+  mimeType: string;
+  label: string;
+  gen: (args: Record<string, unknown>) => Promise<Buffer> | Buffer;
+}
+
+const FILE_GENERATORS: Record<string, FileGenerator> = {
+  [EXCEL_TOOL_NAME]: {
+    ext: 'xlsx',
+    mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    label: 'Excel',
+    gen: (a) => generateExcel(a as unknown as ExcelSpec),
+  },
+  [CSV_TOOL_NAME]: {
+    ext: 'csv',
+    mimeType: 'text/csv;charset=utf-8',
+    label: 'CSV',
+    gen: (a) => generateCsv(a as unknown as CsvSpec),
+  },
+  [PDF_TOOL_NAME]: {
+    ext: 'pdf',
+    mimeType: 'application/pdf',
+    label: 'PDF',
+    gen: (a) => generatePdf(a as unknown as PdfSpec),
+  },
+  [PPTX_TOOL_NAME]: {
+    ext: 'pptx',
+    mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    label: 'PowerPoint',
+    gen: (a) => generatePptx(a as unknown as PptxSpec),
+  },
+};
+
+function sanitizeFileBase(filename: unknown): string {
+  const base = String(filename ?? 'export').replace(/[^\w.-]+/g, '-');
+  return base || 'export';
 }
 
 export async function executeTool(
@@ -249,28 +422,23 @@ export async function executeTool(
     return { content: "Grafico mostrato correttamente nell'interfaccia utente.", isError: false };
   }
 
-  if (name === EXCEL_TOOL_NAME) {
+  const fileGen = FILE_GENERATORS[name];
+  if (fileGen) {
     try {
-      const buffer = await generateExcel(args as unknown as ExcelSpec);
-      const base = String((args as { filename?: unknown }).filename ?? 'export').replace(
-        /[^\w.-]+/g,
-        '-'
-      );
-      const fileName = `${base || 'export'}.xlsx`;
-      logger.info({ tool: name, fileName, bytes: buffer.length }, '[tool] create_excel: file generato');
+      const buffer = await fileGen.gen(args);
+      const fileName = `${sanitizeFileBase((args as { filename?: unknown }).filename)}.${fileGen.ext}`;
+      logger.info({ tool: name, fileName, bytes: buffer.length }, `[tool] ${name}: file generato`);
       send({
         type: 'file',
-        file: {
-          id,
-          name: fileName,
-          mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-          dataBase64: buffer.toString('base64'),
-        },
+        file: { id, name: fileName, mimeType: fileGen.mimeType, dataBase64: buffer.toString('base64') },
       });
-      return { content: `File Excel "${fileName}" generato e pronto per il download.`, isError: false };
+      return {
+        content: `File ${fileGen.label} "${fileName}" generato e pronto per il download.`,
+        isError: false,
+      };
     } catch (err) {
-      logger.error({ err, tool: name }, '[tool] create_excel: generazione fallita');
-      return { content: `Errore generazione Excel: ${String(err)}`, isError: true };
+      logger.error({ err, tool: name }, `[tool] ${name}: generazione fallita`);
+      return { content: `Errore generazione ${fileGen.label}: ${String(err)}`, isError: true };
     }
   }
 

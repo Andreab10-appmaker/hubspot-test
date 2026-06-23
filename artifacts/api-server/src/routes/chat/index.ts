@@ -10,9 +10,14 @@ import {
 import {
   CHART_TOOL,
   EXCEL_TOOL,
+  CSV_TOOL,
+  PDF_TOOL,
+  PPTX_TOOL,
   buildSystemPrompt,
   executeTool,
+  isWriteTool,
   NormalizedTool,
+  type AgentMode,
 } from '../../lib/providers/shared.js';
 
 const router = Router();
@@ -27,6 +32,7 @@ interface ChatRequest {
   messages?: Array<{ role: 'user' | 'assistant'; content: string }>;
   provider?: string;
   model?: string;
+  mode?: string;
   approvedActions?: ApprovedAction[];
 }
 
@@ -98,22 +104,32 @@ router.post('/completions', async (req, res) => {
     );
   }
 
+  const mode: AgentMode = body.mode === 'plan' ? 'plan' : 'build';
+
+  const mcpNormalized: NormalizedTool[] = mcpTools.map((t) => ({
+    name: t.name,
+    description: t.description || '',
+    inputSchema:
+      (t.inputSchema as Record<string, unknown>) || { type: 'object', properties: {} },
+  }));
+  // In modalità Piano (sola lettura) rimuoviamo del tutto i tool di scrittura:
+  // il modello non può proprio invocarli, niente conferme, solo analisi.
+  const mcpForMode = mode === 'plan' ? mcpNormalized.filter((t) => !isWriteTool(t.name)) : mcpNormalized;
+
   const tools: NormalizedTool[] = [
-    ...mcpTools.map((t) => ({
-      name: t.name,
-      description: t.description || '',
-      inputSchema:
-        (t.inputSchema as Record<string, unknown>) || { type: 'object', properties: {} },
-    })),
+    ...mcpForMode,
     CHART_TOOL,
     EXCEL_TOOL,
+    CSV_TOOL,
+    PDF_TOOL,
+    PPTX_TOOL,
   ];
 
   openSSE();
   try {
     await runAgent(provider, {
       model,
-      system: buildSystemPrompt(mcpAvailable),
+      system: buildSystemPrompt(mcpAvailable, mode),
       messages: body.messages || [],
       tools,
       send,

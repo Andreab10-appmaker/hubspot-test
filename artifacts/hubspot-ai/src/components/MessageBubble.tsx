@@ -17,6 +17,25 @@ function downloadFile(file: DownloadFile) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+// Stile (icona + colore) del pulsante di download in base all'estensione.
+function fileStyle(name: string): { icon: string; cls: string } {
+  const ext = name.split('.').pop()?.toLowerCase() || '';
+  switch (ext) {
+    case 'xlsx':
+    case 'xls':
+      return { icon: '📊', cls: 'bg-[#1D6F42] hover:bg-[#185c37]' };
+    case 'csv':
+      return { icon: '🧾', cls: 'bg-[#0F766E] hover:bg-[#0c5d57]' };
+    case 'pdf':
+      return { icon: '📄', cls: 'bg-[#B30B00] hover:bg-[#8f0900]' };
+    case 'pptx':
+    case 'ppt':
+      return { icon: '📑', cls: 'bg-[#C43E1C] hover:bg-[#a23217]' };
+    default:
+      return { icon: '⬇️', cls: 'bg-[#33475B] hover:bg-[#2a3b4d]' };
+  }
+}
+
 // Estrae le property dagli input dei tool HubSpot (es. batch-create-objects),
 // per mostrare un'anteprima leggibile invece del JSON grezzo.
 function ActionDetails({ input }: { input: Record<string, unknown> }) {
@@ -165,15 +184,18 @@ export default function MessageBubble({
         {/* Download file (Excel, ecc.) */}
         {!isUser && message.files && message.files.length > 0 && (
           <div className="mb-2 flex flex-wrap gap-2">
-            {message.files.map((f) => (
-              <button
-                key={f.id}
-                onClick={() => downloadFile(f)}
-                className="inline-flex items-center gap-1.5 bg-[#1D6F42] hover:bg-[#185c37] text-white text-[12px] font-semibold rounded-lg px-3 py-2 transition-colors shadow-sm"
-              >
-                ⬇️ Scarica {f.name}
-              </button>
-            ))}
+            {message.files.map((f) => {
+              const s = fileStyle(f.name);
+              return (
+                <button
+                  key={f.id}
+                  onClick={() => downloadFile(f)}
+                  className={`inline-flex items-center gap-1.5 ${s.cls} text-white text-[12px] font-semibold rounded-lg px-3 py-2 transition-colors shadow-sm`}
+                >
+                  {s.icon} Scarica {f.name}
+                </button>
+              );
+            })}
           </div>
         )}
 

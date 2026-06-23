@@ -12,6 +12,7 @@ interface ChatBody {
   messages?: Array<{ role: 'user' | 'assistant'; content: string }>;
   provider?: ProviderId;
   model?: string;
+  mode?: 'build' | 'plan';
   approvedActions?: Array<{ id: string; name: string; input: Record<string, unknown> }>;
 }
 
@@ -28,6 +29,7 @@ export default function ChatInterface() {
   const [provider, setProvider] = useState<ProviderId>(DEFAULT_PROVIDER);
   const [model, setModel] = useState<string>(PROVIDER_CONFIG[DEFAULT_PROVIDER].defaultModel);
   const [customModel, setCustomModel] = useState(false);
+  const [planMode, setPlanMode] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -172,6 +174,7 @@ export default function ChatInterface() {
         messages: updatedMessages.map((m) => ({ role: m.role, content: m.content })),
         provider,
         model,
+        mode: planMode ? 'plan' : 'build',
       });
     } catch (err) {
       setMessages((prev) => {
@@ -209,6 +212,7 @@ export default function ChatInterface() {
         approvedActions: pc.actions.map((a) => ({ id: a.id, name: a.name, input: a.input })),
         provider,
         model,
+        mode: planMode ? 'plan' : 'build',
       });
     } catch (err) {
       setMessages((prev) => {
@@ -266,8 +270,24 @@ export default function ChatInterface() {
             </div>
           </div>
 
-          {/* Selettore provider + modello */}
+          {/* Toggle modalità + selettore provider + modello */}
           <div className="ml-auto flex items-center gap-2">
+            <button
+              onClick={() => setPlanMode((p) => !p)}
+              disabled={loading}
+              title={
+                planMode
+                  ? 'Modalità Piano (sola lettura): analizza e propone, nessuna scrittura sul CRM'
+                  : 'Modalità Operativa: può scrivere sul CRM previa conferma'
+              }
+              className={`text-[11px] font-semibold rounded-md px-2 py-1 border transition-colors disabled:opacity-50 ${
+                planMode
+                  ? 'bg-amber-400/25 border-amber-300/70 text-amber-100'
+                  : 'bg-emerald-400/20 border-emerald-300/50 text-emerald-50'
+              }`}
+            >
+              {planMode ? '🔍 Piano' : '⚡ Operativo'}
+            </button>
             <select
               value={provider}
               onChange={(e) => changeProvider(e.target.value as ProviderId)}
@@ -362,8 +382,8 @@ export default function ChatInterface() {
             </button>
           </div>
           <p className="text-center text-[11px] text-gray-400 mt-2">
-            {PROVIDER_CONFIG[provider].label} · {model || '—'} · MCP @hubspot/mcp-server · Enter per
-            inviare
+            {planMode ? '🔍 Piano' : '⚡ Operativo'} · {PROVIDER_CONFIG[provider].label} ·{' '}
+            {model || '—'} · MCP @hubspot/mcp-server · Enter per inviare
           </p>
         </footer>
       </main>

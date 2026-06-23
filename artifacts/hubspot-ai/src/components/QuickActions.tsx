@@ -35,6 +35,24 @@ const ACTIONS = [
       "Esporta in un file Excel scaricabile i deal aperti, con colonne Nome, Fase, Valore (€) e Data di chiusura, e una riga TOTALE che usa una formula di somma sulla colonna Valore. Usa il tool create_excel. Se HubSpot non è raggiungibile, genera comunque un foglio d'esempio con 3 righe fittizie per mostrarmi il formato.",
   },
   {
+    icon: '📄',
+    label: 'Report PDF',
+    prompt:
+      "Genera un report PDF scaricabile dei deal aperti, con titolo, colonne Nome, Fase e Valore (€) e una riga TOTALE. Usa il tool create_pdf. Se HubSpot non è raggiungibile, usa 3 righe d'esempio per mostrarmi il formato.",
+  },
+  {
+    icon: '📑',
+    label: 'Presentazione',
+    prompt:
+      "Crea una presentazione PowerPoint scaricabile sulla pipeline 2026: una slide di sintesi con 3 punti chiave e una slide con la tabella dei deal per fase (valori in €). Usa il tool create_pptx. Se HubSpot non è raggiungibile, usa dati d'esempio.",
+  },
+  {
+    icon: '🧾',
+    label: 'Esporta CSV',
+    prompt:
+      "Esporta in un file CSV scaricabile i contatti recenti, con colonne Nome, Email e Azienda. Usa il tool create_csv. Se HubSpot non è raggiungibile, usa 3 righe d'esempio.",
+  },
+  {
     icon: '👤',
     label: 'Contatti recenti',
     prompt: 'Mostra i 5 contatti aggiunti più di recente',

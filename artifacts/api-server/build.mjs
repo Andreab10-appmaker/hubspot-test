@@ -30,6 +30,8 @@ async function buildAll() {
     external: [
       "*.node",
       "exceljs",
+      "pptxgenjs",
+      "pdf-lib",
       "sharp",
       "better-sqlite3",
       "sqlite3",
