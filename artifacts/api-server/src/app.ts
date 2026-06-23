@@ -1,6 +1,8 @@
 import express, { type Express } from "express";
 import cors from "cors";
 import pinoHttp from "pino-http";
+import path from "node:path";
+import fs from "node:fs";
 import router from "./routes";
 import { logger } from "./lib/logger";
 
@@ -30,5 +32,30 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 app.use("/api", router);
+
+// Serve la SPA buildata (frontend hubspot-ai) così l'app è single-origin:
+// /api/* = API, tutto il resto = applicazione React. Risolve il "GET / -> 404".
+const publicDir =
+  process.env["PUBLIC_DIR"] ||
+  path.resolve(__dirname, "../../hubspot-ai/dist/public");
+const indexHtml = path.join(publicDir, "index.html");
+
+if (fs.existsSync(indexHtml)) {
+  app.use(express.static(publicDir));
+  // SPA fallback (compatibile con Express 5): ogni GET non-/api -> index.html.
+  app.use((req, res, next) => {
+    if (req.method !== "GET" || req.path.startsWith("/api")) {
+      next();
+      return;
+    }
+    res.sendFile(indexHtml);
+  });
+  logger.info({ publicDir }, "Serving frontend SPA");
+} else {
+  logger.warn(
+    { publicDir },
+    "Frontend non buildato: solo /api disponibile (esegui `pnpm run build`).",
+  );
+}
 
 export default app;
