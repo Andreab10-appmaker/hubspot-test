@@ -1,28 +1,40 @@
 # HubSpot AI Chat Interface — MCP Demo
 
-Interfaccia chat AI che si collega al CRM HubSpot tramite **Model Context
-Protocol (MCP)**. Claude (via `@anthropic-ai/sdk`) esegue un *agentic loop* nel
-backend Next.js: scopre i tool esposti da `@hubspot/mcp-server` (avviato come
-processo figlio in **stdio**), li chiama per leggere/scrivere dati reali nel CRM
-e poi risponde in italiano in streaming (SSE) all'interfaccia.
+Interfaccia chat AI collegata al CRM **HubSpot** tramite **Model Context
+Protocol (MCP)**. Il modello (OpenAI o Anthropic) esegue un *agentic loop* nel
+backend Next.js: scopre i tool di `@hubspot/mcp-server` (processo figlio
+**stdio**), li chiama per leggere/scrivere dati reali nel CRM, e risponde in
+italiano in **streaming (SSE)** — con **grafici interattivi in tempo reale**.
 
 ```
-Browser (React Chat)
-  │  POST /api/chat (messaggio + history)
+Browser (React + Recharts)
+  │  POST /api/chat (messaggi + provider + modello)
   ▼
-Next.js API Route (/api/chat)  ── runtime Node.js
+Next.js API Route (Node.js)
   ├── avvia @hubspot/mcp-server (stdio, singleton)
-  ├── tools/list via MCP
-  ├── agentic loop: Claude → tool_use → callTool(MCP) → tool_result → ripeti
-  └── streaming SSE della risposta finale
+  ├── tools/list via MCP  (+ tool "render_chart")
+  ├── agentic loop (OpenAI o Anthropic):
+  │     modello → tool_use → HubSpot MCP / render_chart → risultato → ripeti
+  └── streaming SSE: testo, badge tool, e spec dei grafici
 ```
+
+## Funzionalità
+
+- **Due provider AI**, scelti dall'header in alto a destra:
+  - **OpenAI** (default) — default model **`gpt-5.4-mini`**, con funzione di scelta
+    del modello (`gpt-5.4`, `gpt-5.5`, `gpt-5.4-nano`, … o un ID custom digitato a mano).
+  - **Anthropic** (opzionale) — default `claude-sonnet-4-6` (anche `claude-opus-4-8`).
+- **Grafici in tempo reale** (Recharts): bar / line / area / pie, con formati
+  valore € / % / numero. Il modello recupera i dati reali da HubSpot, li aggrega
+  e chiama il tool `render_chart`; il grafico compare nella chat.
+  Esempi: *"Qual è la mia pipeline per il 2026?"*, *"Incassi previsti questo
+  mese?"*, *"Forecast prossimi 3 anni"*, *"Lead per fonte"*.
+- **CRUD CRM**: leggere/creare deal, contatti, note, ecc. via i tool HubSpot MCP.
 
 ## Stack
 
-- **Next.js 14** (App Router) + React + Tailwind CSS
-- **Backend**: Next.js API Route (Node.js)
-- **AI**: `@anthropic-ai/sdk` — modello `claude-sonnet-4-6` (configurabile in
-  `app/api/chat/route.ts`, costante `MODEL`)
+- **Next.js 14** (App Router) + React + Tailwind + **Recharts**
+- **AI**: `openai` (default) e `@anthropic-ai/sdk` (opzionale) — astrazione in `lib/providers/`
 - **MCP client**: `@modelcontextprotocol/sdk` (`StdioClientTransport`)
 - **MCP server**: `@hubspot/mcp-server` (npm, avviato via `npx`)
 
@@ -33,128 +45,110 @@ Next.js API Route (/api/chat)  ── runtime Node.js
 Richiede **Node.js >= 18.17**.
 
 ```bash
-# 1. Installa le dipendenze
 npm install
-
-# 2. Crea il file dei secret locali
-cp .env.local.example .env.local
-#   poi apri .env.local e inserisci i valori reali:
-#   ANTHROPIC_API_KEY=sk-ant-...
-#   HUBSPOT_ACCESS_TOKEN=pat-na1-...
-
-# 3. Avvia in sviluppo
-npm run dev
-# apri http://localhost:3000
+cp .env.local.example .env.local   # poi inserisci i valori reali
+npm run dev                         # http://localhost:3000
 ```
 
-> `@hubspot/mcp-server` è una dipendenza del progetto, quindi `npx` usa la copia
-> locale in `node_modules` (nessun download a runtime).
+`.env.local` (servono SOLO le chiavi del/i provider che usi):
+
+```
+OPENAI_API_KEY=sk-...            # provider di default
+OPENAI_MODEL=gpt-5.4-mini        # opzionale: modello OpenAI di default
+ANTHROPIC_API_KEY=sk-ant-...     # opzionale (solo se usi Anthropic)
+ANTHROPIC_MODEL=claude-sonnet-4-6
+HUBSPOT_ACCESS_TOKEN=pat-na1-... # obbligatorio
+```
 
 ---
 
-## 2. Scope HubSpot necessari
+## 2. Scope HubSpot
 
 Nel Private App Token (`pat-na1-...`) servono questi ambiti
 (HubSpot → Impostazioni → Integrazioni → App private → la tua app → **Ambiti**):
 
-**Lettura**
-- `crm.objects.contacts.read`
-- `crm.objects.companies.read`
-- `crm.objects.deals.read`
-- `crm.objects.tickets.read`
-- `crm.objects.notes.read`
-- `crm.schemas.contacts.read`
-- `crm.schemas.deals.read`
+**Lettura**: `crm.objects.contacts.read`, `crm.objects.companies.read`,
+`crm.objects.deals.read`, `crm.objects.tickets.read`, `crm.objects.notes.read`,
+`crm.schemas.contacts.read`, `crm.schemas.deals.read`
 
-**Scrittura** (per creare deal/contatti/note)
-- `crm.objects.contacts.write`
-- `crm.objects.deals.write`
-- `crm.objects.notes.write`
+**Scrittura**: `crm.objects.contacts.write`, `crm.objects.deals.write`,
+`crm.objects.notes.write`
 
-Dopo aver aggiornato gli scope **non serve un nuovo token**: il PAT esistente
-acquisisce automaticamente i nuovi permessi.
+Dopo aver aggiornato gli scope **non serve un nuovo token**.
 
 ---
 
 ## 3. Deploy su Replit — come impostare i Secret
 
-Su Replit **non** usare `.env.local` (è in `.gitignore` e non viene caricato).
-Le chiavi vanno messe nei **Secrets**, che Replit espone come variabili
-d'ambiente (`process.env`) — esattamente i nomi che il codice si aspetta.
+Su Replit **non** usare `.env.local`. Le chiavi vanno nei **Secrets**, esposti
+automaticamente come variabili d'ambiente (gli stessi nomi che legge il codice).
 
-### Passi
+1. Apri la tab **Secrets** (icona 🔒, pannello *Tools*).
+2. Aggiungi i secret — il **nome deve essere identico**:
 
-1. Importa il repo su Replit (**Create Repl → Import from GitHub**) oppure carica
-   i file.
-2. Apri la tab **Secrets** (icona 🔒, nel pannello *Tools* a sinistra; in
-   alternativa il comando `Secrets` dalla palette).
-3. Aggiungi **due** secret, uno alla volta — il **nome deve essere identico**:
+   | Key | Obbligatorio? | Value |
+   | --- | --- | --- |
+   | `OPENAI_API_KEY` | ✅ se usi OpenAI (default) | `sk-...` |
+   | `HUBSPOT_ACCESS_TOKEN` | ✅ sempre | `pat-na1-...` |
+   | `ANTHROPIC_API_KEY` | solo se usi Anthropic | `sk-ant-...` |
+   | `OPENAI_MODEL` | opzionale (default `gpt-5.4-mini`) | es. `gpt-5.4` |
+   | `ANTHROPIC_MODEL` | opzionale | es. `claude-opus-4-8` |
 
-   | Key (nome)             | Value (valore)        |
-   | ---------------------- | --------------------- |
-   | `ANTHROPIC_API_KEY`    | `sk-ant-...`          |
-   | `HUBSPOT_ACCESS_TOKEN` | `pat-na1-...`         |
+   > Minimo per partire con i default: **`OPENAI_API_KEY`** + **`HUBSPOT_ACCESS_TOKEN`**.
 
-4. **Run** per testare in sviluppo. Per pubblicare: **Deploy**
-   - *Build command*: `npm install && npm run build`
-   - *Run command*: `npm run start`
-   - I Secret impostati sono disponibili anche nei Deployment (verifica che
-     compaiano nella sezione Secrets del deployment).
+3. **Run** per testare; per pubblicare **Deploy**
+   - *Build*: `npm install && npm run build`
+   - *Run*: `npm run start`
+   - Verifica che i Secret siano disponibili anche nel Deployment.
 
-> **Tipo di deployment** — consigliata una **Reserved VM** (always-on): il
-> server MCP gira come processo figlio persistente, quindi la connessione resta
-> calda. Con **Autoscale** funziona comunque, ma a ogni cold start il processo
-> `@hubspot/mcp-server` viene riavviato (solo la prima richiesta è più lenta).
-
-> Le porte e l'avvio su `0.0.0.0` sono già configurati in `.replit` e negli
-> script `npm` (`next dev/start -H 0.0.0.0`); Next legge automaticamente `PORT`.
+> **Tipo di deployment** — consigliata una **Reserved VM** (always-on): il server
+> MCP gira come processo figlio persistente. Su **Autoscale** funziona, ma a ogni
+> cold start `@hubspot/mcp-server` viene riavviato (prima richiesta più lenta).
+> Porte e bind su `0.0.0.0` sono già in `.replit` e negli script `npm`.
 
 ---
 
 ## 4. Test rapidi
 
-- `"Mostra i deal aperti"` → test di lettura
-- `"Crea un deal da 15.000€ chiamato 'AiPow - Progetto CRM' in fase 'Proposta inviata'"`
-  → test di scrittura (compare il badge arancione del tool; poi verifica su
-  HubSpot CRM → Deal)
-- `"Crea un contatto mario.rossi@example.com di nome Mario Rossi"` → scrittura
-- `"Aggiungi una nota 'Call lunedì' al deal che hai appena creato"` → multi-step
+- `"Qual è la mia pipeline per il 2026?"` → grafico a barre per fase
+- `"Incassi previsti questo mese?"` → dato + grafico
+- `"Forecast incassi prossimi 3 anni"` → grafico per anno
+- `"Distribuzione lead per fonte"` → grafico a torta
+- `"Crea un deal da 15.000€ 'AiPow - Progetto CRM' in fase 'Proposta inviata'"` → scrittura
+
+Cambia **provider/modello** dal selettore in alto a destra (default OpenAI · `gpt-5.4-mini`).
 
 ---
 
 ## 5. Troubleshooting
 
-| Errore | Causa probabile | Soluzione |
+| Errore | Causa | Soluzione |
 |---|---|---|
-| `HubSpot MCP non disponibile` (503) | `HUBSPOT_ACCESS_TOKEN` mancante o npx non avvia il server | Verifica il secret; controlla i log del server |
-| `401 Unauthorized` da HubSpot | Token scaduto o scope mancanti | Vedi sezione 2 |
-| `permission denied` creando un deal | Manca `crm.objects.deals.write` | Aggiungi lo scope in HubSpot |
-| Streaming che non scorre | Proxy che bufferizza | Header `X-Accel-Buffering: no` già impostato nella route |
-| MCP si disconnette | Processo figlio terminato | Il singleton si auto-riconnette alla richiesta successiva |
+| `OPENAI_API_KEY non impostato` (503) | Manca la key del provider scelto | Aggiungi il Secret, o cambia provider |
+| `HubSpot MCP non disponibile` (503) | `HUBSPOT_ACCESS_TOKEN` mancante / npx KO | Verifica il Secret e i log |
+| `401` da HubSpot | Token scaduto o scope mancanti | Vedi sezione 2 |
+| Modello OpenAI non valido | ID modello errato | Digita un ID valido nel selettore o cambia `OPENAI_MODEL` |
+| Grafico non compare | Il modello non ha chiamato `render_chart` | Chiedi esplicitamente "con un grafico"; verifica che ci siano dati |
 
 ---
 
 ## Struttura
 
 ```
-.
-├── .env.local.example       # template dei secret (locale)
-├── .replit                  # config Replit (run/deploy/porte)
-├── next.config.js
-├── tailwind.config.js
-├── postcss.config.js
-├── tsconfig.json
-├── app/
-│   ├── layout.tsx
-│   ├── page.tsx
-│   ├── globals.css
-│   └── api/chat/route.ts    # agentic loop + bridge MCP (SSE)
-├── components/
-│   ├── ChatInterface.tsx
-│   ├── MessageBubble.tsx
-│   ├── ToolCallBadge.tsx
-│   └── QuickActions.tsx
-└── lib/
-    ├── mcp-client.ts        # singleton: avvia/gestisce @hubspot/mcp-server
-    └── types.ts
+app/
+  ├── layout.tsx · page.tsx · globals.css
+  └── api/chat/route.ts          # orchestrazione: MCP + dispatch provider (SSE)
+components/
+  ├── ChatInterface.tsx          # chat + selettore provider/modello
+  ├── MessageBubble.tsx · ToolCallBadge.tsx · QuickActions.tsx
+  └── ChartView.tsx              # rendering grafici (Recharts)
+lib/
+  ├── mcp-client.ts              # singleton @hubspot/mcp-server
+  ├── types.ts
+  └── providers/
+      ├── config.ts              # provider/modelli (client+server)
+      ├── shared.ts              # tool render_chart, system prompt, executeTool
+      ├── openai.ts              # agentic loop OpenAI
+      ├── anthropic.ts           # agentic loop Anthropic
+      └── index.ts               # dispatch + resolveModel
 ```
