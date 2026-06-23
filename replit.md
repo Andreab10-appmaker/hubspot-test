@@ -1,44 +1,60 @@
-# [Project name]
+# HubSpot AI Interface
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+Chat AI in italiano per il CRM HubSpot: legge e scrive deal/contatti/note via Model Context Protocol (MCP) e genera **grafici interattivi in tempo reale** (pipeline, forecast incassi, distribuzione lead). Provider AI commutabile (OpenAI di default, Anthropic opzionale).
 
 ## Run & Operate
 
-- `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
-- `pnpm run typecheck` — full typecheck across all packages
-- `pnpm run build` — typecheck + build all packages
-- `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
-- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- Required env: `DATABASE_URL` — Postgres connection string
+- `pnpm install` — installa le dipendenze del workspace (pnpm obbligatorio).
+- `pnpm run build` — typecheck + build di tutti i pacchetti (frontend → `artifacts/hubspot-ai/dist/public`, API → `artifacts/api-server/dist/index.mjs`).
+- `pnpm run typecheck` — typecheck su tutto il workspace.
+- **Avvio locale (single-origin):** `pnpm run build` poi `PORT=5000 pnpm --filter @workspace/api-server start` → apri `http://localhost:5000` (l'API serve anche la SPA).
+- `pnpm --filter @workspace/api-spec run codegen` — rigenera client React + schemi Zod dall'OpenAPI (`lib/api-spec/openapi.yaml`).
+- **Env runtime:** `PORT` (obbligatorio, fornito da Replit), `OPENAI_API_KEY` (provider di default), `HUBSPOT_ACCESS_TOKEN` (token **App Privata** `pat-...`), `ANTHROPIC_API_KEY` (opzionale). `DATABASE_URL` **non serve** (vedi Gotchas).
 
 ## Stack
 
 - pnpm workspaces, Node.js 24, TypeScript 5.9
-- API: Express 5
-- DB: PostgreSQL + Drizzle ORM
-- Validation: Zod (`zod/v4`), `drizzle-zod`
-- API codegen: Orval (from OpenAPI spec)
-- Build: esbuild (CJS bundle)
+- API: Express 5 (SSE) — bundle ESM con esbuild
+- Frontend: Vite 7 + React 19 + shadcn/ui + Tailwind 4 + Recharts
+- AI: `openai` (default) e `@anthropic-ai/sdk` (opzionale); HubSpot via `@hubspot/mcp-server` (stdio)
+- API codegen: Orval (da OpenAPI) → `lib/api-client-react`, `lib/api-zod`
+- DB: Drizzle ORM (scaffolding, **non in uso** — vedi Gotchas)
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `artifacts/api-server/` — backend. Chat SSE `POST /api/chat/completions`, `GET /api/healthz`; serve la SPA buildata (single-origin). Logica in `src/lib/providers/*` (astrazione provider) e `src/lib/mcp-client.ts` (singleton MCP). `src/app.ts` = Express + static SPA.
+- `artifacts/hubspot-ai/` — frontend. Chat UI + selettore provider/modello + grafici. `src/components/ChatInterface.tsx` (stream SSE), `ChartView.tsx` (Recharts). Build → `dist/public`.
+- `artifacts/mockup-sandbox/` — sandbox mockup di Replit (NON fa parte del prodotto).
+- `lib/api-spec/` — **contratto OpenAPI** (source of truth) + config Orval.
+- `lib/api-client-react/`, `lib/api-zod/` — generati dall'OpenAPI (non editare a mano).
+- `lib/db/` — schema Drizzle (scaffolding, non importato).
+- `scripts/` — script di workspace.
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- **Single-origin**: l'API server serve il frontend buildato (`hubspot-ai/dist/public`) con fallback SPA Express 5; il frontend usa `fetch('/api/...')` same-origin. Niente CORS/proxy in produzione.
+- **Astrazione provider** (`src/lib/providers/`): OpenAI (default `gpt-5.4-mini`) e Anthropic condividono lo stesso agentic loop e lo stesso contratto di eventi SSE; si sceglie provider/modello dall'header della UI o via `OPENAI_MODEL`/`ANTHROPIC_MODEL`.
+- **HubSpot via MCP locale**: `@hubspot/mcp-server` avviato come processo figlio stdio (`npx`), riusato come singleton; richiede un token App Privata.
+- **Grafici lato client**: il modello chiama il tool `render_chart` con dati reali aggregati; il backend invia la spec via SSE e il frontend la renderizza con Recharts (nessuna immagine generata server-side).
+- **`lib/db` non è collegato**: nessun import nel codice in esecuzione, quindi non serve un Postgres per buildare o avviare.
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+L'utente chiede in linguaggio naturale (es. "Qual è la mia pipeline per il 2026?", "Incassi previsti questo mese?", "Lead per fonte"): l'assistente recupera i dati reali da HubSpot, risponde in italiano e mostra grafici interattivi. Supporta anche operazioni di scrittura (creare deal, contatti, note).
 
 ## User preferences
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
+- Risposte **sempre in italiano**.
+- Provider di default **OpenAI**, modello **`gpt-5.4-mini`**; Anthropic come opzione.
+- Token HubSpot: usare un **token App Privata** (`pat-...`), NON la chiave sviluppatore né la chiave di accesso personale.
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- **`HUBSPOT_ACCESS_TOKEN` deve essere un Private App token (`pat-...`)** — da *Impostazioni → Integrazioni → App private*. Developer API key / Personal Access Key danno `404 Not Found` / `EXPIRED_AUTHENTICATION` sul tool MCP.
+- **`PORT` è obbligatorio a runtime**: l'api-server lancia un errore se manca. Replit lo fornisce; in locale passalo (`PORT=5000`).
+- **Builda prima di avviare in locale**: l'api-server serve la SPA da `hubspot-ai/dist/public`; senza build vedi solo `/api` (warning nei log) e `GET /` non mostra la UI.
+- **`DATABASE_URL` non serve**: `lib/db` non è importato. Non eseguire `db push` finché non colleghi davvero il DB.
+- **Deploy Replit (autoscale)**: Build `pnpm install && pnpm run build`, Run `pnpm --filter @workspace/api-server start` (già in `.replit`).
 
 ## Pointers
 

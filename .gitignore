@@ -47,3 +47,7 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# Local env files (secrets) — in produzione usa i Replit Secrets
+.env
+.env.*
