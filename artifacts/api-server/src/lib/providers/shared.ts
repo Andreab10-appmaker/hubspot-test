@@ -1,5 +1,6 @@
 import { callMCPTool } from '../mcp-client.js';
 import { generateExcel, type ExcelSpec } from '../excel.js';
+import { logger } from '../logger.js';
 
 export type SendFn = (data: object) => void;
 
@@ -70,12 +71,17 @@ export const CHART_TOOL: NormalizedTool = {
 export const EXCEL_TOOL: NormalizedTool = {
   name: EXCEL_TOOL_NAME,
   description:
-    'Genera un file Excel (.xlsx) scaricabile e ben formattato. Usalo quando ' +
-    "l'utente chiede un export / report / foglio di calcolo. Recupera SEMPRE " +
-    'prima i dati reali da HubSpot, poi costruisci i fogli. USA FORMULE Excel ' +
-    "reali per totali e aggregati: una cella stringa che inizia con '=' è una " +
-    "formula (es. '=SUM(B2:B10)'). NON incollare totali calcolati a mano. " +
-    'Imposta numberFormat per importi (€), percentuali e date.',
+    'Genera un file Excel (.xlsx) scaricabile e ben formattato e lo mostra ' +
+    "all'utente come pulsante di download. DEVI usare questo tool OGNI VOLTA che " +
+    "l'utente chiede di ESPORTARE, SCARICARE, generare un EXCEL / XLSX / foglio " +
+    'di calcolo o un REPORT tabellare (anche se non scrive esplicitamente la ' +
+    'parola "excel"). NON limitarti a elencare i dati nel testo: mettili nel file. ' +
+    'Dati: preferisci dati REALI da HubSpot (recuperali prima con i tool MCP); se ' +
+    'HubSpot non è raggiungibile, usa i dati già presenti nella conversazione o ' +
+    "forniti dall'utente — non bloccarti. USA FORMULE Excel reali per totali e " +
+    "aggregati: una cella stringa che inizia con '=' è una formula (es. " +
+    "'=SUM(B2:B10)'). NON incollare totali calcolati a mano. Imposta numberFormat " +
+    'per importi (€), percentuali e date. Puoi creare più fogli nello stesso file.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -192,12 +198,16 @@ distribuzioni). NON inventare numeri: recupera prima i dati reali da HubSpot,
 aggrega e poi passa i valori. line/area per serie temporali, bar per confronti,
 pie per composizioni. valueFormat "currency" per €, "percent" per percentuali.
 
-EXPORT EXCEL:
-Hai il tool "create_excel" per generare file .xlsx scaricabili e ben formattati
-(export/report/fogli di calcolo). Recupera prima i dati reali da HubSpot, poi crea
-fogli con intestazioni chiare e numberFormat adeguati (€, %, date). USA FORMULE
-Excel reali (celle che iniziano con '=') per totali e aggregati, mai valori
-calcolati a mano. Accompagna con un breve commento testuale.
+EXPORT EXCEL (.xlsx):
+Hai il tool "create_excel" per generare file Excel scaricabili. REGOLA FERREA: se
+l'utente chiede di "esportare", "scaricare", qualcosa "in excel"/"in xlsx", un
+"foglio di calcolo" o un "report" tabellare, DEVI chiamare create_excel — non
+limitarti a elencare i dati nel testo. Preferisci dati reali da HubSpot; se il CRM
+non è disponibile, usa i dati già presenti in conversazione o forniti dall'utente,
+senza bloccarti. Best practice (skill xlsx): intestazioni chiare, un numberFormat
+adeguato per colonna (€, %, date), e FORMULE Excel reali (celle che iniziano con
+'=') per ogni totale o aggregato — mai valori calcolati a mano. Usa più fogli se
+utile. Dopo la generazione, accompagna con un breve commento testuale.
 
 Linee guida generali:
 - Deal: nome, valore (€), fase, proprietario, data chiusura
@@ -207,7 +217,7 @@ Linee guida generali:
 - Conferma esplicitamente quando un'operazione di scrittura va a buon fine
 - Suggerisci sempre possibili azioni successive`;
 
-export function buildSystemPrompt(): string {
+export function buildSystemPrompt(mcpAvailable = true): string {
   const today = new Date().toLocaleDateString('it-IT', {
     weekday: 'long',
     year: 'numeric',
@@ -215,7 +225,16 @@ export function buildSystemPrompt(): string {
     day: 'numeric',
     timeZone: 'Europe/Rome',
   });
-  return `${SYSTEM_BASE}\n\nData odierna: ${today} (fuso Europe/Rome).`;
+  let prompt = `${SYSTEM_BASE}\n\nData odierna: ${today} (fuso Europe/Rome).`;
+  if (!mcpAvailable) {
+    prompt +=
+      `\n\nATTENZIONE: la connessione a HubSpot (MCP) NON è al momento disponibile. ` +
+      `Puoi comunque generare GRAFICI (render_chart) ed EXCEL (create_excel) a ` +
+      `partire dai dati forniti dall'utente o già presenti nella conversazione. Se ` +
+      `per rispondere servono dati dal CRM, spiega che HubSpot non è raggiungibile e ` +
+      `invita l'utente a verificare il token di accesso — non inventare numeri.`;
+  }
+  return prompt;
 }
 
 export async function executeTool(
@@ -225,6 +244,7 @@ export async function executeTool(
   send: SendFn
 ): Promise<{ content: string; isError: boolean }> {
   if (name === CHART_TOOL_NAME) {
+    logger.info({ tool: name }, '[tool] render_chart invocato');
     send({ type: 'chart', chart: { id, ...args } });
     return { content: "Grafico mostrato correttamente nell'interfaccia utente.", isError: false };
   }
@@ -237,6 +257,7 @@ export async function executeTool(
         '-'
       );
       const fileName = `${base || 'export'}.xlsx`;
+      logger.info({ tool: name, fileName, bytes: buffer.length }, '[tool] create_excel: file generato');
       send({
         type: 'file',
         file: {
@@ -248,10 +269,12 @@ export async function executeTool(
       });
       return { content: `File Excel "${fileName}" generato e pronto per il download.`, isError: false };
     } catch (err) {
+      logger.error({ err, tool: name }, '[tool] create_excel: generazione fallita');
       return { content: `Errore generazione Excel: ${String(err)}`, isError: true };
     }
   }
 
+  logger.info({ tool: name }, '[tool] chiamata MCP HubSpot');
   try {
     const result = await callMCPTool(name, args);
     const content = Array.isArray(result.content)

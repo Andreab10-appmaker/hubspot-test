@@ -84,16 +84,18 @@ router.post('/completions', async (req, res) => {
     return;
   }
 
+  // HubSpot MCP è opzionale: se non parte (token mancante/scaduto), degradiamo
+  // con grazia mantenendo i tool di output (grafici/Excel) invece di bloccare tutto.
   let mcpTools: Awaited<ReturnType<typeof getMCPTools>> = [];
+  let mcpAvailable = true;
   try {
     mcpTools = await getMCPTools();
   } catch (err) {
-    req.log.error({ err }, '[MCP] Recupero tool fallito');
-    res.status(503).json({
-      error:
-        'HubSpot MCP non disponibile. Verifica HUBSPOT_ACCESS_TOKEN e che npx possa avviare @hubspot/mcp-server.',
-    });
-    return;
+    mcpAvailable = false;
+    req.log.warn(
+      { err },
+      '[MCP] HubSpot non disponibile: proseguo con i soli tool di output (grafici/Excel)'
+    );
   }
 
   const tools: NormalizedTool[] = [
@@ -111,7 +113,7 @@ router.post('/completions', async (req, res) => {
   try {
     await runAgent(provider, {
       model,
-      system: buildSystemPrompt(),
+      system: buildSystemPrompt(mcpAvailable),
       messages: body.messages || [],
       tools,
       send,

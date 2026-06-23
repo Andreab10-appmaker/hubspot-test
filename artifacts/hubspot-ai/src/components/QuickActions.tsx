@@ -29,6 +29,12 @@ const ACTIONS = [
     prompt: 'Mostra i deal aperti nella pipeline, con un grafico per fase.',
   },
   {
+    icon: '📥',
+    label: 'Esporta Excel',
+    prompt:
+      "Esporta in un file Excel scaricabile i deal aperti, con colonne Nome, Fase, Valore (€) e Data di chiusura, e una riga TOTALE che usa una formula di somma sulla colonna Valore. Usa il tool create_excel. Se HubSpot non è raggiungibile, genera comunque un foglio d'esempio con 3 righe fittizie per mostrarmi il formato.",
+  },
+  {
     icon: '👤',
     label: 'Contatti recenti',
     prompt: 'Mostra i 5 contatti aggiunti più di recente',
