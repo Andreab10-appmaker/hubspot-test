@@ -1,22 +1,39 @@
 'use client';
 
 const ACTIONS = [
-  { icon: '💰', label: 'Deal aperti', prompt: 'Mostra i deal aperti nella pipeline' },
+  {
+    icon: '📊',
+    label: 'Pipeline 2026',
+    prompt:
+      'Mostrami la pipeline di vendita per il 2026 con un grafico a barre del valore (€) per fase.',
+  },
+  {
+    icon: '💶',
+    label: 'Incassi del mese',
+    prompt:
+      'Quali sono gli incassi previsti questo mese? Mostra il dettaglio con un grafico.',
+  },
+  {
+    icon: '📈',
+    label: 'Forecast 3 anni',
+    prompt:
+      'Previsione incassi per i prossimi 3 anni, con un grafico per anno (valori in €).',
+  },
+  {
+    icon: '🥧',
+    label: 'Lead per fonte',
+    prompt:
+      'Distribuzione dei contatti/lead per fonte di provenienza, con un grafico a torta.',
+  },
+  {
+    icon: '💰',
+    label: 'Deal aperti',
+    prompt: 'Mostra i deal aperti nella pipeline, con un grafico per fase.',
+  },
   {
     icon: '👤',
     label: 'Contatti recenti',
     prompt: 'Mostra i 5 contatti aggiunti più di recente',
-  },
-  { icon: '🏢', label: 'Aziende', prompt: 'Lista le prime 10 aziende nel CRM' },
-  {
-    icon: '📊',
-    label: 'Pipeline',
-    prompt: 'Analizza la pipeline di vendita raggruppata per fase',
-  },
-  {
-    icon: '📅',
-    label: 'Scadenze',
-    prompt: 'Quali deal hanno la data di chiusura nelle prossime 4 settimane?',
   },
   {
     icon: '➕',
@@ -28,7 +45,6 @@ const ACTIONS = [
     label: 'Crea nota',
     prompt: 'Voglio aggiungere una nota a un contatto. Di chi si tratta?',
   },
-  { icon: '🔍', label: 'Cerca contatto', prompt: 'Aiutami a cercare un contatto specifico' },
 ];
 
 export default function QuickActions({

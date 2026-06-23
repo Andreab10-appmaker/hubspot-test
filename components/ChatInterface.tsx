@@ -1,7 +1,12 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { Message, ToolCall } from '@/lib/types';
+import { Message, ToolCall, ChartSpec } from '@/lib/types';
+import {
+  PROVIDER_CONFIG,
+  DEFAULT_PROVIDER,
+  ProviderId,
+} from '@/lib/providers/config';
 import MessageBubble from './MessageBubble';
 import QuickActions from './QuickActions';
 
@@ -10,16 +15,23 @@ export default function ChatInterface() {
     {
       role: 'assistant',
       content:
-        '👋 Ciao! Sono connesso al tuo HubSpot via MCP.\n\nPosso:\n• 💰 Leggere e **creare deal**\n• 👤 Gestire contatti\n• 🏢 Consultare aziende\n• 📝 Creare note e attività\n\nCosa vuoi fare?',
+        '👋 Ciao! Sono il tuo assistente HubSpot via MCP.\n\nPosso:\n• 💰 Leggere e creare deal, contatti, note\n• 📊 Generare grafici in tempo reale (pipeline, forecast incassi, lead)\n\nProva: "Mostrami la pipeline 2026" oppure "Incassi previsti questo mese".',
     },
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [provider, setProvider] = useState<ProviderId>(DEFAULT_PROVIDER);
+  const [model, setModel] = useState<string>(PROVIDER_CONFIG[DEFAULT_PROVIDER].defaultModel);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, loading]);
+
+  const changeProvider = (p: ProviderId) => {
+    setProvider(p);
+    setModel(PROVIDER_CONFIG[p].defaultModel);
+  };
 
   const sendMessage = async (text?: string) => {
     const msgText = (text || input).trim();
@@ -31,11 +43,11 @@ export default function ChatInterface() {
     setInput('');
     setLoading(true);
 
-    // Aggiunge un placeholder per l'assistente.
+    // Placeholder per l'assistente.
     const assistantIdx = updatedMessages.length;
     setMessages((prev) => [
       ...prev,
-      { role: 'assistant', content: '', toolCalls: [] },
+      { role: 'assistant', content: '', toolCalls: [], charts: [] },
     ]);
 
     try {
@@ -43,10 +55,9 @@ export default function ChatInterface() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          messages: updatedMessages.map((m) => ({
-            role: m.role,
-            content: m.content,
-          })),
+          messages: updatedMessages.map((m) => ({ role: m.role, content: m.content })),
+          provider,
+          model,
         }),
       });
 
@@ -98,11 +109,22 @@ export default function ChatInterface() {
           if (data.type === 'tool_result') {
             setMessages((prev) => {
               const next = [...prev];
-              const tc = (next[assistantIdx].toolCalls || []).find(
-                (t) => t.id === data.id
-              );
+              const tc = (next[assistantIdx].toolCalls || []).find((t) => t.id === data.id);
               if (tc) tc.result = data.result;
               return [...next];
+            });
+          }
+
+          if (data.type === 'chart') {
+            const spec = data.chart as ChartSpec;
+            setMessages((prev) => {
+              const next = [...prev];
+              const existing = next[assistantIdx].charts || [];
+              next[assistantIdx] = {
+                ...next[assistantIdx],
+                charts: [...existing, spec],
+              };
+              return next;
             });
           }
 
@@ -112,7 +134,6 @@ export default function ChatInterface() {
               next[assistantIdx] = {
                 ...next[assistantIdx],
                 content: data.text,
-                toolCalls: data.toolCalls || currentToolCalls,
               };
               return next;
             });
@@ -164,13 +185,42 @@ export default function ChatInterface() {
             ⚡
           </div>
           <div>
-            <div className="font-semibold text-sm leading-tight">
-              HubSpot AI Interface
-            </div>
+            <div className="font-semibold text-sm leading-tight">HubSpot AI Interface</div>
             <div className="text-[11px] text-emerald-400 flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />
               MCP attivo · @hubspot/mcp-server
             </div>
+          </div>
+
+          {/* Selettore provider + modello */}
+          <div className="ml-auto flex items-center gap-2">
+            <select
+              value={provider}
+              onChange={(e) => changeProvider(e.target.value as ProviderId)}
+              disabled={loading}
+              className="bg-white/10 text-white text-[11px] rounded-md px-2 py-1 outline-none border border-white/20 disabled:opacity-50"
+              title="Provider AI"
+            >
+              {(Object.keys(PROVIDER_CONFIG) as ProviderId[]).map((id) => (
+                <option key={id} value={id} className="text-black">
+                  {PROVIDER_CONFIG[id].label}
+                </option>
+              ))}
+            </select>
+            <input
+              list="model-list"
+              value={model}
+              onChange={(e) => setModel(e.target.value)}
+              disabled={loading}
+              placeholder="modello"
+              title="Modello (puoi digitarne uno custom)"
+              className="bg-white/10 text-white text-[11px] rounded-md px-2 py-1 w-36 outline-none border border-white/20 placeholder-white/50 disabled:opacity-50"
+            />
+            <datalist id="model-list">
+              {PROVIDER_CONFIG[provider].models.map((m) => (
+                <option key={m} value={m} />
+              ))}
+            </datalist>
           </div>
         </header>
 
@@ -198,10 +248,8 @@ export default function ChatInterface() {
             <input
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) =>
-                e.key === 'Enter' && !e.shiftKey && sendMessage()
-              }
-              placeholder='Es: "Crea un deal da 15.000€ per Friulair in fase Proposta inviata"'
+              onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && sendMessage()}
+              placeholder='Es: "Qual è la mia pipeline per il 2026?"'
               disabled={loading}
               className="flex-1 border-2 border-gray-200 rounded-xl px-4 py-3 text-sm focus:border-[#FF7A59] outline-none transition-colors"
             />
@@ -214,7 +262,8 @@ export default function ChatInterface() {
             </button>
           </div>
           <p className="text-center text-[11px] text-gray-400 mt-2">
-            Connesso via MCP · @hubspot/mcp-server (stdio) · Enter per inviare
+            {PROVIDER_CONFIG[provider].label} · {model || '—'} · MCP @hubspot/mcp-server · Enter per
+            inviare
           </p>
         </footer>
       </main>

@@ -2,6 +2,7 @@
 
 import { Message } from '@/lib/types';
 import ToolCallBadge from './ToolCallBadge';
+import ChartView from './ChartView';
 
 export default function MessageBubble({ message }: { message: Message }) {
   const isUser = message.role === 'user';
@@ -14,12 +15,21 @@ export default function MessageBubble({ message }: { message: Message }) {
       >
         {isUser ? 'TU' : 'HS'}
       </div>
-      <div className="max-w-[76%]">
+      <div className="max-w-[78%] min-w-0">
         {/* Tool call badges */}
         {!isUser && message.toolCalls && message.toolCalls.length > 0 && (
           <div className="mb-2 flex flex-wrap gap-1">
             {message.toolCalls.map((tc, i) => (
               <ToolCallBadge key={i} toolCall={tc} />
+            ))}
+          </div>
+        )}
+
+        {/* Charts */}
+        {!isUser && message.charts && message.charts.length > 0 && (
+          <div className="mb-2 space-y-2">
+            {message.charts.map((c) => (
+              <ChartView key={c.id} spec={c} />
             ))}
           </div>
         )}
@@ -36,9 +46,7 @@ export default function MessageBubble({ message }: { message: Message }) {
                   }`
             }`}
           >
-            {message.content || (
-              <span className="text-gray-400 animate-pulse">...</span>
-            )}
+            {message.content}
           </div>
         )}
       </div>
