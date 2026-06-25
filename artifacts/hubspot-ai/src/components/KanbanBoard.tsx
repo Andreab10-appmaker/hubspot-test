@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { ChevronDown, Inbox } from "lucide-react";
 import type { CrmRecord } from "@/lib/api";
 import { useStageOrdered } from "@/lib/stage-context";
-import { stageTone } from "@/lib/schema";
+import { stageTone, stageLabel } from "@/lib/schema";
 import { formatCurrency, formatCurrencyCompact, formatDate, toNumber } from "@/lib/format";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -90,12 +90,14 @@ export default function KanbanBoard({
         0,
       ),
     }));
-    // Eventuali stati non presenti nelle opzioni (es. valori legacy).
+    // Eventuali stati non presenti nelle opzioni (es. slug legacy): risolvi
+    // comunque una label leggibile, mai l'ID/slug grezzo.
+    const labelMap = Object.fromEntries(ordered.map((o) => [o.value, o.label]));
     for (const [k, recs] of byStage) {
       if (k !== UNASSIGNED && !ordered.some((o) => o.value === k)) {
         cols.push({
           value: k,
-          label: k,
+          label: stageLabel(k, labelMap),
           records: recs,
           total: recs.reduce((s, r) => s + toNumber(r.properties.amount), 0),
         });

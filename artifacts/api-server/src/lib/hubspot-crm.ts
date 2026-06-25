@@ -1,5 +1,39 @@
+import https from "node:https";
 import { callMCPTool } from "./mcp-client.js";
 import { logger } from "./logger.js";
+
+// GET diretto sull'API REST HubSpot (per dati non esposti dall'MCP, es. pipeline).
+function hubspotApiGet(path: string): Promise<Record<string, unknown>> {
+  const token = process.env.HUBSPOT_ACCESS_TOKEN;
+  return new Promise((resolve, reject) => {
+    if (!token) return reject(new Error("HUBSPOT_ACCESS_TOKEN non impostato"));
+    const req = https.request(
+      {
+        hostname: "api.hubapi.com",
+        path,
+        method: "GET",
+        headers: { Authorization: `Bearer ${token}` },
+      },
+      (res) => {
+        let body = "";
+        res.on("data", (d) => (body += d));
+        res.on("end", () => {
+          if ((res.statusCode ?? 0) >= 400) {
+            reject(new Error(`HubSpot API ${res.statusCode}: ${body.slice(0, 200)}`));
+            return;
+          }
+          try {
+            resolve(JSON.parse(body));
+          } catch (e) {
+            reject(e as Error);
+          }
+        });
+      },
+    );
+    req.on("error", reject);
+    req.end();
+  });
+}
 
 /**
  * Servizio CRM "diretto": legge/scrive su HubSpot via @hubspot/mcp-server SENZA
@@ -229,6 +263,29 @@ export interface PropertyOption {
 
 const optionsCache = new Map<string, PropertyOption[]>();
 
+// Le fasi deal (dealstage) hanno externalOptions=true: le opzioni NON sono sulla
+// property ma nella definizione delle PIPELINE. Le leggiamo dall'API REST e
+// uniamo gli stage di tutte le pipeline (value = id stage, label parlante).
+async function getDealStageOptions(): Promise<PropertyOption[]> {
+  const data = await hubspotApiGet("/crm/v3/pipelines/deals");
+  const pipelines = Array.isArray(data.results) ? data.results : [];
+  const out: PropertyOption[] = [];
+  pipelines.forEach((pl, pi) => {
+    const stages = (pl as { stages?: unknown }).stages;
+    if (!Array.isArray(stages)) return;
+    for (const st of stages) {
+      const s = st as Record<string, unknown>;
+      out.push({
+        value: String(s.id ?? ""),
+        label: String(s.label ?? s.id ?? ""),
+        // offset per pipeline così le colonne restano raggruppate per pipeline
+        displayOrder: pi * 100 + (typeof s.displayOrder === "number" ? s.displayOrder : 0),
+      });
+    }
+  });
+  return out.filter((o) => o.value).sort((a, b) => a.displayOrder - b.displayOrder);
+}
+
 export async function getPropertyOptions(
   objectType: string,
   propertyName: string,
@@ -236,6 +293,13 @@ export async function getPropertyOptions(
   const key = `${objectType}:${propertyName}`;
   const cached = optionsCache.get(key);
   if (cached) return cached;
+
+  // dealstage: fonte = pipeline API (l'MCP get-property torna options vuote).
+  if (objectType === "deals" && propertyName === "dealstage") {
+    const opts = await getDealStageOptions();
+    optionsCache.set(key, opts);
+    return opts;
+  }
 
   const json = parseMcpJson(
     await callMCPTool("hubspot-get-property", { objectType, propertyName }),
@@ -322,6 +386,18 @@ export interface DashboardSummary {
   }>;
 }
 
+// Label leggibili per gli stage della pipeline HubSpot DI DEFAULT (slug legacy
+// non più presenti nella pipeline corrente ma ancora su qualche deal).
+const DEFAULT_DEAL_STAGE_SLUGS: Record<string, string> = {
+  appointmentscheduled: "Appointment Scheduled",
+  qualifiedtobuy: "Qualified To Buy",
+  presentationscheduled: "Presentation Scheduled",
+  decisionmakerboughtin: "Decision Maker Bought-In",
+  contractsent: "Contract Sent",
+  closedwon: "Closed Won",
+  closedlost: "Closed Lost",
+};
+
 function num(v: unknown): number {
   const n = Number(String(v ?? "").replace(/[^0-9.-]/g, ""));
   return Number.isFinite(n) ? n : 0;
@@ -342,13 +418,15 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
   ]);
 
   // Mappa value→label degli stati deal (best-effort: se fallisce, label = value).
-  let stageLabels = new Map<string, string>();
+  const stageLabels = new Map<string, string>();
   try {
     const opts = await getPropertyOptions("deals", "dealstage");
-    stageLabels = new Map(opts.map((o) => [o.value, o.label]));
+    for (const o of opts) stageLabels.set(o.value, o.label);
   } catch {
-    /* fallback: useremo il valore grezzo come label */
+    /* fallback sotto */
   }
+  const resolveStage = (stage: string) =>
+    stageLabels.get(stage) || DEFAULT_DEAL_STAGE_SLUGS[stage] || stage;
 
   const byStage = new Map<string, { count: number; value: number }>();
   let pipelineValue = 0;
@@ -359,7 +437,7 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
     const stage = d.properties.dealstage || "—";
     // Won/closed si determinano sulla LABEL ("Closed Won"/"Closed Lost"),
     // non sull'ID numerico dello stage.
-    const lbl = stageLabels.get(stage) || stage;
+    const lbl = resolveStage(stage);
     const amount = num(d.properties.amount);
     const entry = byStage.get(stage) || { count: 0, value: 0 };
     entry.count += 1;
@@ -403,7 +481,7 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
     openDeals,
     dealsByStage: [...byStage.entries()].map(([stage, v]) => ({
       stage,
-      stageLabel: stageLabels.get(stage) || stage,
+      stageLabel: resolveStage(stage),
       count: v.count,
       value: v.value,
     })),
