@@ -34,7 +34,10 @@ export interface RevenueSpreadingSpec {
   cashYear?: number; // anno del foglio cash flow (default 2026)
 }
 
-const EUR = '#,##0" €";(#,##0" €)';
+// Formato € a due sezioni (positivo;negativo). Le virgolette DEVONO essere
+// bilanciate in entrambe le sezioni: un literal non terminato rende il formato
+// invalido e Google Sheets mostra #VALUE! su tutte le celle.
+const EUR = '#,##0" €";(#,##0" €")';
 const C = {
   navy: "FF1F3864",
   amber: "FFFFF0CD",
