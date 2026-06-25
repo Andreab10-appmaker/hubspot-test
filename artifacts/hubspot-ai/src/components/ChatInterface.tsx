@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { Sparkles, Settings2, ArrowUp, ShieldCheck, Zap } from 'lucide-react';
 import { Message, ToolCall, ChartSpec, DownloadFile, ConfirmAction } from '../lib/types';
 import {
   PROVIDER_CONFIG,
@@ -6,7 +7,13 @@ import {
   ProviderId,
 } from '../lib/providers/config';
 import MessageBubble from './MessageBubble';
-import QuickActions from './QuickActions';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
 interface ChatBody {
   messages?: Array<{ role: 'user' | 'assistant'; content: string }>;
@@ -16,19 +23,25 @@ interface ChatBody {
   approvedActions?: Array<{ id: string; name: string; input: Record<string, unknown> }>;
 }
 
+// Suggerimenti sobri (chip), niente sidebar di prompt verbosi.
+const SUGGESTIONS = [
+  'Mostrami la pipeline 2026 con un grafico',
+  'Incassi previsti questo mese',
+  'Distribuzione dei lead per fonte',
+];
+
 export default function ChatInterface() {
   const [messages, setMessages] = useState<Message[]>([
     {
       role: 'assistant',
       content:
-        '👋 Ciao! Sono il tuo assistente HubSpot via MCP.\n\nPosso:\n• 💰 Leggere e creare deal, contatti, note (con conferma prima di scrivere)\n• 📊 Generare grafici in tempo reale\n• 📄 Esportare report Excel scaricabili\n\nProva: "Mostrami la pipeline 2026" o "Esporta i deal aperti in Excel".',
+        'Ciao 👋 Sono il tuo assistente HubSpot. Posso leggere e scrivere su deal, contatti e note (con conferma), generare grafici ed esportare report. Chiedimi pure.',
     },
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [provider, setProvider] = useState<ProviderId>(DEFAULT_PROVIDER);
   const [model, setModel] = useState<string>(PROVIDER_CONFIG[DEFAULT_PROVIDER].defaultModel);
-  const [customModel, setCustomModel] = useState(false);
   const [planMode, setPlanMode] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -39,10 +52,8 @@ export default function ChatInterface() {
   const changeProvider = (p: ProviderId) => {
     setProvider(p);
     setModel(PROVIDER_CONFIG[p].defaultModel);
-    setCustomModel(false);
   };
 
-  // Esegue una richiesta SSE e aggiorna il messaggio assistente all'indice dato.
   const streamChat = async (assistantIdx: number, body: ChatBody) => {
     const res = await fetch('/api/chat/completions', {
       method: 'POST',
@@ -245,148 +256,160 @@ export default function ChatInterface() {
     });
   };
 
+  const showSuggestions = messages.length <= 1 && !loading;
+
   return (
-    <div className="flex h-screen bg-gray-50 font-sans">
-      {/* Sidebar */}
-      <aside className="w-52 bg-white border-r border-gray-200 flex flex-col p-3 gap-1 overflow-y-auto">
-        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-2 mb-2">
-          Azioni rapide
-        </p>
-        <QuickActions onAction={sendMessage} disabled={loading} />
-      </aside>
+    <div className="mx-auto flex h-[calc(100vh-7.5rem)] max-w-3xl flex-col md:h-[calc(100vh-6rem)]">
+      {/* Header */}
+      <div className="flex items-center gap-2.5 pb-3">
+        <span className="grid h-9 w-9 place-items-center rounded-xl bg-primary/15 text-primary">
+          <Sparkles className="h-5 w-5" strokeWidth={2.1} />
+        </span>
+        <div className="flex-1">
+          <h1 className="text-lg font-bold tracking-tight leading-tight">
+            Assistente
+          </h1>
+          <p className="text-[12px] text-muted-foreground">
+            {planMode ? 'Sola lettura · analizza e propone' : 'Operativo · può scrivere con conferma'}
+          </p>
+        </div>
 
-      {/* Main chat */}
-      <main className="flex-1 flex flex-col overflow-hidden">
-        {/* Header */}
-        <header className="bg-[#2D3E50] text-white px-5 h-14 flex items-center gap-3 shadow-md">
-          <div className="w-8 h-8 rounded-lg bg-[#FF7A59] flex items-center justify-center text-base">
-            ⚡
-          </div>
-          <div>
-            <div className="font-semibold text-sm leading-tight">HubSpot AI Interface</div>
-            <div className="text-[11px] text-emerald-400 flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />
-              MCP attivo · @hubspot/mcp-server
+        {/* Plan/Operativo toggle */}
+        <Button
+          variant={planMode ? 'secondary' : 'ghost'}
+          size="sm"
+          className="gap-1.5"
+          onClick={() => setPlanMode((p) => !p)}
+          disabled={loading}
+          data-testid="button-mode"
+        >
+          {planMode ? <ShieldCheck className="h-4 w-4" /> : <Zap className="h-4 w-4" />}
+          {planMode ? 'Piano' : 'Operativo'}
+        </Button>
+
+        {/* Settings popover (provider + modello) */}
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="ghost" size="icon" data-testid="button-settings">
+              <Settings2 className="h-4 w-4" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent align="end" className="w-64 space-y-3">
+            <div className="space-y-1.5">
+              <label className="text-[12px] font-semibold text-muted-foreground">
+                Provider
+              </label>
+              <select
+                value={provider}
+                onChange={(e) => changeProvider(e.target.value as ProviderId)}
+                disabled={loading}
+                className="w-full rounded-lg border border-input bg-background px-2.5 py-2 text-sm outline-none focus:ring-2 focus:ring-ring/40"
+              >
+                {(Object.keys(PROVIDER_CONFIG) as ProviderId[]).map((id) => (
+                  <option key={id} value={id}>
+                    {PROVIDER_CONFIG[id].label}
+                  </option>
+                ))}
+              </select>
             </div>
-          </div>
-
-          {/* Toggle modalità + selettore provider + modello */}
-          <div className="ml-auto flex items-center gap-2">
-            <button
-              onClick={() => setPlanMode((p) => !p)}
-              disabled={loading}
-              title={
-                planMode
-                  ? 'Modalità Piano (sola lettura): analizza e propone, nessuna scrittura sul CRM'
-                  : 'Modalità Operativa: può scrivere sul CRM previa conferma'
-              }
-              className={`text-[11px] font-semibold rounded-md px-2 py-1 border transition-colors disabled:opacity-50 ${
-                planMode
-                  ? 'bg-amber-400/25 border-amber-300/70 text-amber-100'
-                  : 'bg-emerald-400/20 border-emerald-300/50 text-emerald-50'
-              }`}
-            >
-              {planMode ? '🔍 Piano' : '⚡ Operativo'}
-            </button>
-            <select
-              value={provider}
-              onChange={(e) => changeProvider(e.target.value as ProviderId)}
-              disabled={loading}
-              className="bg-white/10 text-white text-[11px] rounded-md px-2 py-1 outline-none border border-white/20 disabled:opacity-50"
-              title="Provider AI"
-            >
-              {(Object.keys(PROVIDER_CONFIG) as ProviderId[]).map((id) => (
-                <option key={id} value={id} className="text-black">
-                  {PROVIDER_CONFIG[id].label}
-                </option>
-              ))}
-            </select>
-            <select
-              value={customModel ? '__custom__' : model}
-              onChange={(e) => {
-                const v = e.target.value;
-                if (v === '__custom__') {
-                  setCustomModel(true);
-                } else {
-                  setCustomModel(false);
-                  setModel(v);
-                }
-              }}
-              disabled={loading}
-              title="Modello"
-              className="bg-white/10 text-white text-[11px] rounded-md px-2 py-1 outline-none border border-white/20 disabled:opacity-50 max-w-[160px]"
-            >
-              {PROVIDER_CONFIG[provider].models.map((m) => (
-                <option key={m} value={m} className="text-black">
-                  {m}
-                </option>
-              ))}
-              <option value="__custom__" className="text-black">
-                ✏️ Personalizzato…
-              </option>
-            </select>
-            {customModel && (
-              <input
+            <div className="space-y-1.5">
+              <label className="text-[12px] font-semibold text-muted-foreground">
+                Modello
+              </label>
+              <select
                 value={model}
                 onChange={(e) => setModel(e.target.value)}
                 disabled={loading}
-                placeholder="ID modello"
-                title="Inserisci un ID modello custom"
-                className="bg-white/10 text-white text-[11px] rounded-md px-2 py-1 w-32 outline-none border border-white/20 placeholder-white/50 disabled:opacity-50"
-              />
-            )}
-          </div>
-        </header>
-
-        {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-4">
-          {messages.map((msg, i) => (
-            <MessageBubble
-              key={i}
-              message={msg}
-              disabled={loading}
-              onConfirm={() => confirmMessage(i)}
-              onCancel={() => cancelMessage(i)}
-            />
-          ))}
-          {loading && (
-            <div className="flex items-end gap-2">
-              <div className="w-7 h-7 rounded-full bg-[#FF7A59] flex items-center justify-center text-white text-xs font-bold">
-                HS
-              </div>
-              <div className="bg-white border border-gray-200 rounded-2xl rounded-bl-sm px-4 py-3 text-gray-400 text-sm">
-                Sto interrogando HubSpot...
-              </div>
+                className="w-full rounded-lg border border-input bg-background px-2.5 py-2 text-sm outline-none focus:ring-2 focus:ring-ring/40"
+              >
+                {PROVIDER_CONFIG[provider].models.map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
+              </select>
             </div>
-          )}
-          <div ref={bottomRef} />
-        </div>
+          </PopoverContent>
+        </Popover>
+      </div>
 
-        {/* Input */}
-        <footer className="bg-white border-t border-gray-200 p-4">
-          <div className="flex gap-2">
-            <input
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && sendMessage()}
-              placeholder='Es: "Qual è la mia pipeline per il 2026?"'
-              disabled={loading}
-              className="flex-1 border-2 border-gray-200 rounded-xl px-4 py-3 text-sm focus:border-[#FF7A59] outline-none transition-colors"
-            />
-            <button
-              onClick={() => sendMessage()}
-              disabled={!input.trim() || loading}
-              className="w-11 h-11 rounded-xl bg-[#FF7A59] disabled:bg-gray-200 text-white flex items-center justify-center text-lg transition-colors"
-            >
-              ↑
-            </button>
+      {/* Messages */}
+      <div className="flex-1 space-y-4 overflow-y-auto rounded-2xl border border-card-border bg-card/60 p-4">
+        {messages.map((msg, i) => (
+          <MessageBubble
+            key={i}
+            message={msg}
+            disabled={loading}
+            onConfirm={() => confirmMessage(i)}
+            onCancel={() => cancelMessage(i)}
+          />
+        ))}
+        {loading && (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <span className="flex gap-1">
+              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-primary [animation-delay:-0.2s]" />
+              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-primary [animation-delay:-0.1s]" />
+              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-primary" />
+            </span>
+            Sto interrogando HubSpot…
           </div>
-          <p className="text-center text-[11px] text-gray-400 mt-2">
-            {planMode ? '🔍 Piano' : '⚡ Operativo'} · {PROVIDER_CONFIG[provider].label} ·{' '}
-            {model || '—'} · MCP @hubspot/mcp-server · Enter per inviare
-          </p>
-        </footer>
-      </main>
+        )}
+        <div ref={bottomRef} />
+      </div>
+
+      {/* Suggestions */}
+      {showSuggestions && (
+        <div className="flex flex-wrap gap-2 pt-3">
+          {SUGGESTIONS.map((s) => (
+            <button
+              key={s}
+              onClick={() => sendMessage(s)}
+              className="rounded-full border border-border bg-card px-3 py-1.5 text-[12.5px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              data-testid="chip-suggestion"
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Composer */}
+      <div className="pt-3">
+        <div
+          className={cn(
+            'flex items-end gap-2 rounded-2xl border bg-card p-2 shadow-sm transition-colors',
+            'focus-within:border-primary/50',
+          )}
+        >
+          <textarea
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+              }
+            }}
+            rows={1}
+            placeholder="Scrivi un messaggio… (es. «pipeline 2026»)"
+            disabled={loading}
+            className="max-h-40 min-h-[40px] flex-1 resize-none bg-transparent px-2.5 py-2 text-sm outline-none placeholder:text-muted-foreground"
+            data-testid="input-message"
+          />
+          <Button
+            size="icon"
+            onClick={() => sendMessage()}
+            disabled={!input.trim() || loading}
+            className="h-10 w-10 rounded-xl"
+            data-testid="button-send"
+          >
+            <ArrowUp className="h-5 w-5" />
+          </Button>
+        </div>
+        <p className="pt-2 text-center text-[11px] text-muted-foreground">
+          {PROVIDER_CONFIG[provider].label} · {model} · le scritture richiedono conferma
+        </p>
+      </div>
     </div>
   );
 }
