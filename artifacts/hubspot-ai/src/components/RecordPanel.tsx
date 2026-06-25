@@ -26,6 +26,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useStageOrdered } from "@/lib/stage-context";
 import { cn } from "@/lib/utils";
 
 function toDateInput(value: string | null | undefined): string {
@@ -51,6 +52,8 @@ export default function RecordPanel({
   onOpenChange,
 }: RecordPanelProps) {
   const isMobile = useIsMobile();
+  const dealStages = useStageOrdered("dealstage");
+  const lifecycleStages = useStageOrdered("lifecyclestage");
   const [editing, setEditing] = useState(false);
   const [edits, setEdits] = useState<Record<string, string>>({});
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -154,19 +157,42 @@ export default function RecordPanel({
                     </dt>
                     <dd className="text-[14px]">
                       {isEditing ? (
-                        <Input
-                          value={
-                            f.kind === "date"
-                              ? toDateInput(edits[f.key])
-                              : (edits[f.key] ?? "")
-                          }
-                          type={inputType(f)}
-                          onChange={(e) =>
-                            setEdits((s) => ({ ...s, [f.key]: e.target.value }))
-                          }
-                          className="h-9"
-                          data-testid={`edit-${f.key}`}
-                        />
+                        f.kind === "stage" ? (
+                          <select
+                            value={edits[f.key] ?? ""}
+                            onChange={(e) =>
+                              setEdits((s) => ({ ...s, [f.key]: e.target.value }))
+                            }
+                            className="h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm outline-none focus:ring-2 focus:ring-ring/40"
+                            data-testid={`edit-${f.key}`}
+                          >
+                            <option value="">—</option>
+                            {(f.key === "dealstage"
+                              ? dealStages
+                              : f.key === "lifecyclestage"
+                                ? lifecycleStages
+                                : []
+                            ).map((o) => (
+                              <option key={o.value} value={o.value}>
+                                {o.label}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <Input
+                            value={
+                              f.kind === "date"
+                                ? toDateInput(edits[f.key])
+                                : (edits[f.key] ?? "")
+                            }
+                            type={inputType(f)}
+                            onChange={(e) =>
+                              setEdits((s) => ({ ...s, [f.key]: e.target.value }))
+                            }
+                            className="h-9"
+                            data-testid={`edit-${f.key}`}
+                          />
+                        )
                       ) : (
                         <FieldValue field={f} value={record.properties[f.key]} />
                       )}
@@ -242,14 +268,23 @@ export default function RecordPanel({
                   CRM.
                 </p>
                 <ul className="rounded-lg border border-border bg-secondary/40 p-3 text-sm">
-                  {changed.map((f) => (
-                    <li key={f.key} className="flex gap-2 py-0.5">
-                      <span className="font-medium text-muted-foreground">
-                        {f.label}:
-                      </span>
-                      <span className="truncate">{edits[f.key] || "(vuoto)"}</span>
-                    </li>
-                  ))}
+                  {changed.map((f) => {
+                    const raw = edits[f.key] ?? "";
+                    let shown = raw || "(vuoto)";
+                    if (f.kind === "stage" && raw) {
+                      const opts =
+                        f.key === "dealstage" ? dealStages : lifecycleStages;
+                      shown = opts.find((o) => o.value === raw)?.label || raw;
+                    }
+                    return (
+                      <li key={f.key} className="flex gap-2 py-0.5">
+                        <span className="font-medium text-muted-foreground">
+                          {f.label}:
+                        </span>
+                        <span className="truncate">{shown}</span>
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
             </AlertDialogDescription>

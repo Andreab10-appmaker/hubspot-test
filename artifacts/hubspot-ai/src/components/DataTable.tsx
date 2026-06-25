@@ -3,6 +3,7 @@ import type { EntityConfig } from "@/lib/schema";
 import type { CrmRecord } from "@/lib/api";
 import { initials, colorFromString, textColorFromString } from "@/lib/format";
 import FieldValue from "@/components/FieldValue";
+import { useStageMap } from "@/lib/stage-context";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
@@ -33,6 +34,15 @@ export default function DataTable({
   onSelect,
 }: DataTableProps) {
   const columns = config.fields.filter((f) => f.column);
+  // Mappa stati per risolvere i sottotitoli (deals→dealstage, contacts→lifecyclestage).
+  const dealMap = useStageMap("dealstage");
+  const lifeMap = useStageMap("lifecyclestage");
+  const stageMap =
+    config.type === "deals"
+      ? dealMap
+      : config.type === "contacts"
+        ? lifeMap
+        : undefined;
 
   if (error) {
     return (
@@ -82,7 +92,7 @@ export default function DataTable({
       <ul className="space-y-2 md:hidden" data-testid="datatable-mobile">
         {records.map((r) => {
           const title = config.title(r);
-          const sub = config.subtitle?.(r);
+          const sub = config.subtitle?.(r, stageMap);
           return (
             <li key={r.id}>
               <button

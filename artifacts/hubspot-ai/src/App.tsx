@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as SonnerToaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { StageOptionsProvider } from "@/lib/stage-context";
 import AppShell from "@/components/AppShell";
 import Dashboard from "@/pages/Dashboard";
 import Companies from "@/pages/Companies";
@@ -32,11 +33,13 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-          <AppShell>
-            <Router />
-          </AppShell>
-        </WouterRouter>
+        <StageOptionsProvider>
+          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+            <AppShell>
+              <Router />
+            </AppShell>
+          </WouterRouter>
+        </StageOptionsProvider>
         <Toaster />
         <SonnerToaster />
       </TooltipProvider>

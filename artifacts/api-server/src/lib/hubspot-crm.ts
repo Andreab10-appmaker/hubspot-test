@@ -127,9 +127,12 @@ export interface ListParams {
   sortDir?: "ASCENDING" | "DESCENDING";
 }
 
+// HubSpot CRM list/search accettano al massimo 100 oggetti per richiesta.
+const HUBSPOT_MAX_LIMIT = 100;
+
 export async function listObjects(params: ListParams): Promise<CrmListResult> {
   const { type } = params;
-  const limit = Math.min(Math.max(params.limit ?? 100, 1), 200);
+  const limit = Math.min(Math.max(params.limit ?? 100, 1), HUBSPOT_MAX_LIMIT);
   const properties = params.properties ?? DEFAULT_PROPERTIES[type];
   const search = params.search?.trim();
 
@@ -191,7 +194,7 @@ export async function listAll(
   const out: CrmRecord[] = [];
   let after: string | undefined;
   for (let i = 0; i < maxPages; i++) {
-    const page = await listObjects({ type, limit: 200, after, properties });
+    const page = await listObjects({ type, limit: HUBSPOT_MAX_LIMIT, after, properties });
     out.push(...page.results);
     if (!page.after) break;
     after = page.after;
@@ -213,6 +216,46 @@ export async function getObject(
   );
   const recs = toRecords(json.results);
   return recs[0] ?? null;
+}
+
+// === Opzioni delle property enumeration (es. dealstage, lifecyclestage) =====
+// Sono la FONTE DI VERITÀ per le label "parlanti" degli stati. Cache in memoria.
+
+export interface PropertyOption {
+  value: string;
+  label: string;
+  displayOrder: number;
+}
+
+const optionsCache = new Map<string, PropertyOption[]>();
+
+export async function getPropertyOptions(
+  objectType: string,
+  propertyName: string,
+): Promise<PropertyOption[]> {
+  const key = `${objectType}:${propertyName}`;
+  const cached = optionsCache.get(key);
+  if (cached) return cached;
+
+  const json = parseMcpJson(
+    await callMCPTool("hubspot-get-property", { objectType, propertyName }),
+  );
+  const rawOptions = Array.isArray(json.options) ? json.options : [];
+  const options: PropertyOption[] = rawOptions
+    .map((o) => {
+      const opt = o as Record<string, unknown>;
+      return {
+        value: String(opt.value ?? ""),
+        label: String(opt.label ?? opt.value ?? ""),
+        displayOrder:
+          typeof opt.displayOrder === "number" ? opt.displayOrder : 0,
+      };
+    })
+    .filter((o) => o.value !== "")
+    .sort((a, b) => a.displayOrder - b.displayOrder);
+
+  optionsCache.set(key, options);
+  return options;
 }
 
 // HubSpot vuole valori property come stringhe: normalizziamo.
@@ -265,7 +308,12 @@ export interface DashboardSummary {
   pipelineValue: number; // somma amount dei deal aperti
   wonValue: number; // somma amount dei deal vinti
   openDeals: number;
-  dealsByStage: Array<{ stage: string; count: number; value: number }>;
+  dealsByStage: Array<{
+    stage: string;
+    stageLabel: string;
+    count: number;
+    value: number;
+  }>;
   recentContacts: Array<{
     id: string;
     name: string;
@@ -293,6 +341,15 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
     listAll("deals", DEFAULT_PROPERTIES.deals),
   ]);
 
+  // Mappa value→label degli stati deal (best-effort: se fallisce, label = value).
+  let stageLabels = new Map<string, string>();
+  try {
+    const opts = await getPropertyOptions("deals", "dealstage");
+    stageLabels = new Map(opts.map((o) => [o.value, o.label]));
+  } catch {
+    /* fallback: useremo il valore grezzo come label */
+  }
+
   const byStage = new Map<string, { count: number; value: number }>();
   let pipelineValue = 0;
   let wonValue = 0;
@@ -300,13 +357,16 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
 
   for (const d of deals) {
     const stage = d.properties.dealstage || "—";
+    // Won/closed si determinano sulla LABEL ("Closed Won"/"Closed Lost"),
+    // non sull'ID numerico dello stage.
+    const lbl = stageLabels.get(stage) || stage;
     const amount = num(d.properties.amount);
     const entry = byStage.get(stage) || { count: 0, value: 0 };
     entry.count += 1;
     entry.value += amount;
     byStage.set(stage, entry);
-    if (isWonStage(stage)) wonValue += amount;
-    if (!isClosedStage(stage)) {
+    if (isWonStage(lbl)) wonValue += amount;
+    if (!isClosedStage(lbl)) {
       pipelineValue += amount;
       openDeals += 1;
     }
@@ -343,6 +403,7 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
     openDeals,
     dealsByStage: [...byStage.entries()].map(([stage, v]) => ({
       stage,
+      stageLabel: stageLabels.get(stage) || stage,
       count: v.count,
       value: v.value,
     })),

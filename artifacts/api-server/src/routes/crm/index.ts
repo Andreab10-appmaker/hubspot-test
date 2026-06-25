@@ -6,6 +6,7 @@ import {
   updateObject,
   createObject,
   getDashboardSummary,
+  getPropertyOptions,
 } from "../../lib/hubspot-crm.js";
 
 const router = Router();
@@ -25,6 +26,21 @@ function fail(res: import("express").Response, err: unknown) {
 router.get("/dashboard/summary", async (_req, res) => {
   try {
     res.json(await getDashboardSummary());
+  } catch (err) {
+    fail(res, err);
+  }
+});
+
+// GET /api/crm/meta/:type/:prop — opzioni (value→label, ordinate) di una property
+// enumeration (es. dealstage, lifecyclestage). Fonte di verità per le label stato.
+router.get("/meta/:type/:prop", async (req, res) => {
+  const { type, prop } = req.params;
+  if (!isCrmObjectType(type)) {
+    res.status(400).json({ error: `Tipo non valido: ${type}` });
+    return;
+  }
+  try {
+    res.json({ options: await getPropertyOptions(type, prop) });
   } catch (err) {
     fail(res, err);
   }
