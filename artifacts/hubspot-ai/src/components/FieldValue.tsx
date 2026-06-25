@@ -1,10 +1,19 @@
 import type { FieldDef } from "@/lib/schema";
 import { stageLabel, stageTone } from "@/lib/schema";
 import { formatCurrency, formatDate } from "@/lib/format";
+import { useStageMap } from "@/lib/stage-context";
 import { cn } from "@/lib/utils";
 
-export function StageBadge({ stage }: { stage: string }) {
-  const tone = stageTone(stage);
+export function StageBadge({
+  stage,
+  prop = "dealstage",
+}: {
+  stage: string;
+  /** Property a cui appartiene lo stato (dealstage | lifecyclestage). */
+  prop?: string;
+}) {
+  const map = useStageMap(prop);
+  const tone = stageTone(stage, map);
   return (
     <span
       className={cn(
@@ -22,7 +31,7 @@ export function StageBadge({ stage }: { stage: string }) {
           tone === "open" && "bg-primary",
         )}
       />
-      {stageLabel(stage)}
+      {stageLabel(stage, map)}
     </span>
   );
 }
@@ -45,7 +54,7 @@ export default function FieldValue({
     case "number":
       return <span className="tabular-nums">{v}</span>;
     case "stage":
-      return <StageBadge stage={v} />;
+      return <StageBadge stage={v} prop={field.key} />;
     case "email":
       return (
         <a

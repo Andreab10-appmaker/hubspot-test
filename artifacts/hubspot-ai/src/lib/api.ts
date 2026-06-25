@@ -19,12 +19,23 @@ export interface CrmListResult {
   total?: number;
 }
 
+export interface PropertyOption {
+  value: string;
+  label: string;
+  displayOrder: number;
+}
+
 export interface DashboardSummary {
   counts: { companies: number; contacts: number; deals: number };
   pipelineValue: number;
   wonValue: number;
   openDeals: number;
-  dealsByStage: Array<{ stage: string; count: number; value: number }>;
+  dealsByStage: Array<{
+    stage: string;
+    stageLabel: string;
+    count: number;
+    value: number;
+  }>;
   recentContacts: Array<{
     id: string;
     name: string;
@@ -66,6 +77,17 @@ export function useCrmRecord(type: CrmType, id: string | null) {
     queryKey: ["crm", type, "record", id],
     queryFn: () => getJSON<CrmRecord>(`/api/crm/${type}/${id}`),
     enabled: !!id,
+  });
+}
+
+// Opzioni (value→label, ordinate) di una property enumeration, es. dealstage.
+export function useStageOptions(type: CrmType, prop: string) {
+  return useQuery({
+    queryKey: ["crm", "meta", type, prop],
+    queryFn: () =>
+      getJSON<{ options: PropertyOption[] }>(`/api/crm/meta/${type}/${prop}`),
+    staleTime: 5 * 60_000,
+    select: (d) => d.options,
   });
 }
 

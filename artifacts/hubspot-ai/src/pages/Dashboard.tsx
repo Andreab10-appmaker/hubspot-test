@@ -8,8 +8,7 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { useDashboard } from "@/lib/api";
-import { formatCurrency, formatCurrencyCompact, relativeDate, initials, colorFromString, textColorFromString } from "@/lib/format";
-import { stageLabel } from "@/lib/schema";
+import { formatCurrencyCompact, relativeDate, initials, colorFromString, textColorFromString } from "@/lib/format";
 import type { ChartSpec } from "@/lib/types";
 import StatCard from "@/components/StatCard";
 import ExportButton from "@/components/ExportButton";
@@ -27,7 +26,7 @@ export default function Dashboard() {
         valueFormat: "currency",
         data: data.dealsByStage
           .filter((s) => s.value > 0)
-          .map((s) => ({ label: stageLabel(s.stage), value: s.value })),
+          .map((s) => ({ label: s.stageLabel, value: s.value })),
       }
     : null;
 

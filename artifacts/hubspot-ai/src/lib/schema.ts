@@ -29,7 +29,8 @@ export interface EntityConfig {
   icon: LucideIcon;
   /** Costruisce il titolo leggibile di un record. */
   title: (r: CrmRecord) => string;
-  subtitle?: (r: CrmRecord) => string;
+  /** Sottotitolo; riceve la mappa value→label degli stati per risolvere le fasi. */
+  subtitle?: (r: CrmRecord, stageMap?: Record<string, string>) => string;
   fields: FieldDef[];
 }
 
@@ -90,7 +91,7 @@ export const ENTITIES: Record<CrmType, EntityConfig> = {
     plural: "Trattative",
     icon: Handshake,
     title: (r) => v(r, "dealname") || "(senza nome)",
-    subtitle: (r) => v(r, "dealstage"),
+    subtitle: (r, m) => stageLabel(v(r, "dealstage"), m),
     fields: [
       { key: "dealname", label: "Nome", column: true, editable: true, create: true },
       { key: "amount", label: "Importo", kind: "currency", column: true, editable: true, create: true },
@@ -121,18 +122,30 @@ const STAGE_LABELS: Record<string, string> = {
   other: "Altro",
 };
 
-export function stageLabel(stage: string): string {
+/**
+ * Risolve uno stato nella label "parlante". La fonte di verità è `options`
+ * (value→label da HubSpot); fallback alla slug-map nota; ultimo fallback grezzo.
+ */
+export function stageLabel(
+  stage: string,
+  options?: Record<string, string> | null,
+): string {
   if (!stage) return "—";
+  if (options && options[stage]) return options[stage];
   const key = stage.toLowerCase();
   if (STAGE_LABELS[key]) return STAGE_LABELS[key];
-  // Stage personalizzati arrivano come ID numerici: lasciali leggibili.
+  // ID numerici senza mappa: meglio un placeholder leggibile che il numero grezzo.
   if (/^\d+$/.test(stage)) return `Fase ${stage.slice(-4)}`;
   return stage.charAt(0).toUpperCase() + stage.slice(1);
 }
 
-export function stageTone(stage: string): "won" | "lost" | "open" {
-  const k = stage.toLowerCase();
-  if (/won|customer|vinta/.test(k)) return "won";
+export function stageTone(
+  stage: string,
+  options?: Record<string, string> | null,
+): "won" | "lost" | "open" {
+  // Determina il tono dalla LABEL risolta (gli ID non contengono "won"/"lost").
+  const k = stageLabel(stage, options).toLowerCase();
+  if (/won|customer|vinta|cliente/.test(k)) return "won";
   if (/lost|persa/.test(k)) return "lost";
   return "open";
 }

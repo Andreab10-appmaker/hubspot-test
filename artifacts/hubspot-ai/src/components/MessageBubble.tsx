@@ -1,3 +1,5 @@
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { Message, ConfirmAction, DownloadFile } from '../lib/types';
 import ToolCallBadge from './ToolCallBadge';
 import ChartView from './ChartView';
@@ -146,10 +148,10 @@ export default function MessageBubble({
   return (
     <div className={`flex items-end gap-2 ${isUser ? 'flex-row-reverse' : ''}`}>
       <div
-        className={`w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center text-white text-xs font-bold
-        ${isUser ? 'bg-[#33475B]' : 'bg-[#FF7A59]'}`}
+        className={`w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center text-white text-[10px] font-bold
+        ${isUser ? 'bg-foreground' : 'bg-primary'}`}
       >
-        {isUser ? 'TU' : 'HS'}
+        {isUser ? 'TU' : 'AI'}
       </div>
       <div className="max-w-[78%] min-w-0">
         {/* Tool call badges */}
@@ -200,20 +202,26 @@ export default function MessageBubble({
         )}
 
         {/* Text content */}
-        {message.content && (
-          <div
-            className={`rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap
-            ${
-              isUser
-                ? 'bg-[#FF7A59] text-white rounded-br-sm'
-                : `bg-white border border-gray-200 text-[#2D3E50] rounded-bl-sm shadow-sm ${
-                    message.isError ? 'border-red-200 bg-red-50' : ''
-                  }`
-            }`}
-          >
-            {message.content}
-          </div>
-        )}
+        {message.content &&
+          (isUser ? (
+            <div className="rounded-2xl rounded-br-sm bg-primary px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap text-primary-foreground">
+              {message.content}
+            </div>
+          ) : (
+            <div
+              className={`rounded-2xl rounded-bl-sm border px-4 py-3 text-sm shadow-sm ${
+                message.isError
+                  ? 'border-destructive/30 bg-destructive/5 text-foreground'
+                  : 'border-card-border bg-card text-foreground'
+              }`}
+            >
+              <div className="prose prose-sm max-w-none prose-headings:mt-2 prose-headings:mb-1.5 prose-p:my-1.5 prose-ul:my-1.5 prose-ol:my-1.5 prose-li:my-0.5 prose-pre:my-2 prose-table:my-2 prose-headings:text-foreground prose-p:text-foreground prose-strong:text-foreground prose-strong:font-semibold prose-a:text-primary prose-code:text-foreground prose-code:bg-secondary prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:before:content-none prose-code:after:content-none">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  {message.content}
+                </ReactMarkdown>
+              </div>
+            </div>
+          ))}
       </div>
     </div>
   );

@@ -448,6 +448,19 @@ bloccarti. Per Excel: intestazioni chiare, numberFormat adeguato (€, %, date) 
 FORMULE reali (celle che iniziano con '=') per i totali, mai calcolati a mano. Dopo
 la generazione, accompagna sempre con un breve commento testuale.
 
+ETICHETTE DI STATO LEGGIBILI (REGOLA FERREA):
+I valori di fase/stato in HubSpot sono spesso ID interni o chiavi tecniche
+(es. dealstage = "5602930905" o "appointmentscheduled", lifecyclestage =
+"salesqualifiedlead"). NON mostrarli MAI così all'utente. PRIMA di presentare
+qualsiasi fase deal (dealstage), lifecycle (lifecyclestage) o altra property di
+tipo enumeration — in TESTO, TABELLE e soprattutto nelle ETICHETTE dei GRAFICI
+(render_chart) — risolvi SEMPRE il valore nella sua label "parlante" usando le
+opzioni della property (chiama hubspot-get-property con objectType e propertyName,
+campo "options": ogni voce ha value→label, in displayOrder). Esempi: "5602930905"
+→ "Closed Won"; "appointmentscheduled" → "Appointment Scheduled"; mantieni anche
+l'ordine di displayOrder quando elenchi/raggruppi per fase. Se non riesci a
+risolvere una label, dillo, ma non incollare l'ID grezzo come se fosse il nome.
+
 Linee guida generali:
 - Deal: nome, valore (€), fase, proprietario, data chiusura
 - Contatti: nome, email, azienda, data creazione
