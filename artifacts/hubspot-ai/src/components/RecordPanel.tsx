@@ -54,6 +54,15 @@ export default function RecordPanel({
   const isMobile = useIsMobile();
   const dealStages = useStageOrdered("dealstage");
   const lifecycleStages = useStageOrdered("lifecyclestage");
+  const contractTypes = useStageOrdered("contract_type");
+  const stageOptionsFor = (key: string) =>
+    key === "dealstage"
+      ? dealStages
+      : key === "lifecyclestage"
+        ? lifecycleStages
+        : key === "contract_type"
+          ? contractTypes
+          : [];
   const [editing, setEditing] = useState(false);
   const [edits, setEdits] = useState<Record<string, string>>({});
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -167,12 +176,7 @@ export default function RecordPanel({
                             data-testid={`edit-${f.key}`}
                           >
                             <option value="">—</option>
-                            {(f.key === "dealstage"
-                              ? dealStages
-                              : f.key === "lifecyclestage"
-                                ? lifecycleStages
-                                : []
-                            ).map((o) => (
+                            {stageOptionsFor(f.key).map((o) => (
                               <option key={o.value} value={o.value}>
                                 {o.label}
                               </option>
@@ -272,9 +276,9 @@ export default function RecordPanel({
                     const raw = edits[f.key] ?? "";
                     let shown = raw || "(vuoto)";
                     if (f.kind === "stage" && raw) {
-                      const opts =
-                        f.key === "dealstage" ? dealStages : lifecycleStages;
-                      shown = opts.find((o) => o.value === raw)?.label || raw;
+                      shown =
+                        stageOptionsFor(f.key).find((o) => o.value === raw)
+                          ?.label || raw;
                     }
                     return (
                       <li key={f.key} className="flex gap-2 py-0.5">

@@ -17,6 +17,7 @@ export function StageOptionsProvider({
 }) {
   const dealStages = useStageOptions("deals", "dealstage");
   const lifecycle = useStageOptions("contacts", "lifecyclestage");
+  const contractType = useStageOptions("deals", "contract_type");
 
   const toMap = (opts?: PropertyOption[]) =>
     Object.fromEntries((opts ?? []).map((o) => [o.value, o.label]));
@@ -25,10 +26,12 @@ export function StageOptionsProvider({
     maps: {
       dealstage: toMap(dealStages.data),
       lifecyclestage: toMap(lifecycle.data),
+      contract_type: toMap(contractType.data),
     },
     ordered: {
       dealstage: dealStages.data ?? [],
       lifecyclestage: lifecycle.data ?? [],
+      contract_type: contractType.data ?? [],
     },
   };
 

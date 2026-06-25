@@ -101,6 +101,14 @@ export const DEFAULT_PROPERTIES: Record<CrmObjectType, string[]> = {
     "closedate",
     "hubspot_owner_id",
     "createdate",
+    // Campi custom Revenue Spreading (mostrati/sincronizzati nel frontend)
+    "deal_code",
+    "contract_owner",
+    "contract_start",
+    "contract_duration_years",
+    "contract_type",
+    "kpmg_note",
+    "revenue_schedule",
   ],
 };
 
