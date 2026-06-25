@@ -9,6 +9,7 @@ Chat AI in italiano per il CRM HubSpot: legge e scrive deal/contatti/note via Mo
 - `pnpm run typecheck` — typecheck su tutto il workspace.
 - **Avvio locale (single-origin):** `pnpm run build` poi `PORT=5000 pnpm --filter @workspace/api-server start` → apri `http://localhost:5000` (l'API serve anche la SPA).
 - `pnpm --filter @workspace/api-spec run codegen` — rigenera client React + schemi Zod dall'OpenAPI (`lib/api-spec/openapi.yaml`).
+- `HUBSPOT_ACCESS_TOKEN=pat-... pnpm --filter @workspace/scripts setup:pipeline` — configura le **fasi** della pipeline `default` dei deal allo schema ufficiale (Appointment Scheduled 10% → Discovery call 20% → Proposal/Demo 40% → Tenders 35% → Decision maker brought-in 60% → Contract Sent 80% + Closed Won/Lost). Idempotente; `DRY_RUN=1` per la sola anteprima.
 - **Env runtime:** `PORT` (obbligatorio, fornito da Replit), `OPENAI_API_KEY` (provider di default), `HUBSPOT_ACCESS_TOKEN` (token **App Privata** `pat-...`), `ANTHROPIC_API_KEY` (opzionale). `DATABASE_URL` **non serve** (vedi Gotchas).
 
 ## Stack
@@ -28,7 +29,7 @@ Chat AI in italiano per il CRM HubSpot: legge e scrive deal/contatti/note via Mo
 - `lib/api-spec/` — **contratto OpenAPI** (source of truth) + config Orval.
 - `lib/api-client-react/`, `lib/api-zod/` — generati dall'OpenAPI (non editare a mano).
 - `lib/db/` — schema Drizzle (scaffolding, non importato).
-- `scripts/` — script di workspace.
+- `scripts/` — script di workspace (incl. `setup-pipeline.ts`: configura le fasi della pipeline deal via API REST `/crm/v3/pipelines/deals`, perché il connettore MCP gestisce solo i record, non le fasi).
 
 ## Architecture decisions
 
@@ -36,6 +37,7 @@ Chat AI in italiano per il CRM HubSpot: legge e scrive deal/contatti/note via Mo
 - **Astrazione provider** (`src/lib/providers/`): OpenAI (default `gpt-5.4-mini`) e Anthropic condividono lo stesso agentic loop e lo stesso contratto di eventi SSE; si sceglie provider/modello dall'header della UI o via `OPENAI_MODEL`/`ANTHROPIC_MODEL`.
 - **HubSpot via MCP locale**: `@hubspot/mcp-server` avviato come processo figlio stdio (`npx`), riusato come singleton; richiede un token App Privata.
 - **Grafici lato client**: il modello chiama il tool `render_chart` con dati reali aggregati; il backend invia la spec via SSE e il frontend la renderizza con Recharts (nessuna immagine generata server-side).
+- **Pipeline Export**: il tool di output `create_pipeline_export` (`lib/pipeline-export.ts`) genera un `.xlsx` che riproduce il template finanziario ufficiale (intestazione gruppo "Revenue", colonne anno fisse 2023B/2023A/2025–2030, formati € contabili, riga TOTALE con `=SUM`). L'AI recupera i deal reali da HubSpot e li passa grezzi; il codice colloca ogni importo nella colonna dell'anno di chiusura. La configurazione delle **fasi** della pipeline, invece, non passa dal connettore MCP ma dallo script `setup-pipeline.ts` (vedi Gotchas).
 - **`lib/db` non è collegato**: nessun import nel codice in esecuzione, quindi non serve un Postgres per buildare o avviare.
 
 ## Product
@@ -54,6 +56,7 @@ L'utente chiede in linguaggio naturale (es. "Qual è la mia pipeline per il 2026
 - **`PORT` è obbligatorio a runtime**: l'api-server lancia un errore se manca. Replit lo fornisce; in locale passalo (`PORT=5000`).
 - **Builda prima di avviare in locale**: l'api-server serve la SPA da `hubspot-ai/dist/public`; senza build vedi solo `/api` (warning nei log) e `GET /` non mostra la UI.
 - **`DATABASE_URL` non serve**: `lib/db` non è importato. Non eseguire `db push` finché non colleghi davvero il DB.
+- **Le fasi della pipeline NON si configurano via MCP**: i tool del connettore HubSpot gestiscono solo i *record* (deal/contatti), non lo *schema* delle fasi. Per impostare nomi/probabilità delle fasi usa lo script `setup:pipeline` (API REST Pipelines): il token App Privata deve avere anche lo scope `crm.schemas.deals`.
 - **Deploy Replit (autoscale)**: Build `pnpm install && pnpm run build`, Run `pnpm --filter @workspace/api-server start` (già in `.replit`).
 
 ## Pointers
