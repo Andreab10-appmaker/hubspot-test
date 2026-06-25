@@ -1,5 +1,4 @@
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import Markdown from './Markdown';
 import { Message, ConfirmAction, DownloadFile } from '../lib/types';
 import ToolCallBadge from './ToolCallBadge';
 import ChartView from './ChartView';
@@ -216,9 +215,7 @@ export default function MessageBubble({
               }`}
             >
               <div className="prose prose-sm max-w-none prose-headings:mt-2 prose-headings:mb-1.5 prose-p:my-1.5 prose-ul:my-1.5 prose-ol:my-1.5 prose-li:my-0.5 prose-pre:my-2 prose-table:my-2 prose-headings:text-foreground prose-p:text-foreground prose-strong:text-foreground prose-strong:font-semibold prose-a:text-primary prose-code:text-foreground prose-code:bg-secondary prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:before:content-none prose-code:after:content-none">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                  {message.content}
-                </ReactMarkdown>
+                <Markdown content={message.content} />
               </div>
             </div>
           ))}
