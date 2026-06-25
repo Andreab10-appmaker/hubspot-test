@@ -129,8 +129,16 @@ async function putPipeline(token: string, body: unknown): Promise<Pipeline> {
   );
   if (!res.ok) {
     const text = await res.text();
+    let hint = "";
+    if (res.status === 403 && /MISSING_SCOPES/i.test(text)) {
+      hint =
+        "\n\n👉 Il token App Privata può LEGGERE ma non MODIFICARE le fasi della pipeline.\n" +
+        "   Aggiungi lo scope `crm.schemas.deals.write` (e `crm.schemas.deals.read`) all'App Privata:\n" +
+        "   HubSpot → Impostazioni → Integrazioni → App private → [la tua app] → Ambiti → Salva, poi rilancia.\n" +
+        "   In alternativa imposta le 6 fasi a mano da Impostazioni → Oggetti → Deal → Pipeline.";
+    }
     throw new Error(
-      `PUT pipeline fallita: HTTP ${res.status} ${res.statusText}\n${text}`,
+      `PUT pipeline fallita: HTTP ${res.status} ${res.statusText}\n${text}${hint}`,
     );
   }
   return (await res.json()) as Pipeline;
