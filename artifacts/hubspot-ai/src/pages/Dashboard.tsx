@@ -40,11 +40,18 @@ export default function Dashboard() {
             Panoramica live del tuo CRM HubSpot.
           </p>
         </div>
+        {/* Export Pipeline (vecchio) temporaneamente disattivato su richiesta:
         <ExportButton
           href="/api/exports/pipeline.xlsx"
           filename="pipeline-export.xlsx"
           label="Esporta Pipeline"
           testId="button-export-pipeline"
+        /> */}
+        <ExportButton
+          href="/api/exports/revenue-spreading.xlsx"
+          filename="revenue-spreading.xlsx"
+          label="Esporta Revenue Spreading"
+          testId="button-export-revenue"
         />
       </div>
 

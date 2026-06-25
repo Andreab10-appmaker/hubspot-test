@@ -48,11 +48,12 @@ export default function Deals() {
           </div>
         </div>
         <div className="ml-auto flex items-center gap-2">
+          {/* Export Pipeline (vecchio) disattivato; ora si usa Revenue Spreading. */}
           <ExportButton
-            href="/api/exports/pipeline.xlsx"
-            filename="pipeline-export.xlsx"
-            label="Esporta Pipeline"
-            testId="button-export-pipeline"
+            href="/api/exports/revenue-spreading.xlsx"
+            filename="revenue-spreading.xlsx"
+            label="Esporta Revenue Spreading"
+            testId="button-export-revenue"
           />
           <ExportButton
             href="/api/exports/deals.csv"
