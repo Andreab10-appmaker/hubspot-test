@@ -1,71 +1,77 @@
 const ACTIONS = [
   {
-    icon: '📊',
-    label: 'Pipeline 2026',
+    icon: "📊",
+    label: "Pipeline 2026",
     prompt:
-      'Mostrami la pipeline di vendita per il 2026 con un grafico a barre del valore (€) per fase.',
+      "Mostrami la pipeline di vendita per il 2026 con un grafico a barre del valore (€) per fase.",
   },
   {
-    icon: '💶',
-    label: 'Incassi del mese',
+    icon: "💶",
+    label: "Incassi del mese",
     prompt:
-      'Quali sono gli incassi previsti questo mese? Mostra il dettaglio con un grafico.',
+      "Quali sono gli incassi previsti questo mese? Mostra il dettaglio con un grafico.",
   },
   {
-    icon: '📈',
-    label: 'Forecast 3 anni',
+    icon: "📈",
+    label: "Forecast 3 anni",
     prompt:
-      'Previsione incassi per i prossimi 3 anni, con un grafico per anno (valori in €).',
+      "Previsione incassi per i prossimi 3 anni, con un grafico per anno (valori in €).",
   },
   {
-    icon: '🥧',
-    label: 'Lead per fonte',
+    icon: "🥧",
+    label: "Lead per fonte",
     prompt:
-      'Distribuzione dei contatti/lead per fonte di provenienza, con un grafico a torta.',
+      "Distribuzione dei contatti/lead per fonte di provenienza, con un grafico a torta.",
   },
   {
-    icon: '💰',
-    label: 'Deal aperti',
-    prompt: 'Mostra i deal aperti nella pipeline, con un grafico per fase.',
+    icon: "💰",
+    label: "Deal aperti",
+    prompt: "Mostra i deal aperti nella pipeline, con un grafico per fase.",
   },
   {
-    icon: '📥',
-    label: 'Esporta Excel',
+    icon: "📥",
+    label: "Esporta Excel",
     prompt:
       "Esporta in un file Excel scaricabile i deal aperti, con colonne Nome, Fase, Valore (€) e Data di chiusura, e una riga TOTALE che usa una formula di somma sulla colonna Valore. Usa il tool create_excel. Se HubSpot non è raggiungibile, genera comunque un foglio d'esempio con 3 righe fittizie per mostrarmi il formato.",
   },
   {
-    icon: '📄',
-    label: 'Report PDF',
+    icon: "🗂️",
+    label: "Pipeline Export",
+    prompt:
+      "Genera la Pipeline Export ufficiale (.xlsx) nel template aziendale. Recupera da HubSpot TUTTI i deal della pipeline (per ciascuno: nome, importo/amount e data di chiusura/closedate) e chiama il tool create_pipeline_export passandoli in 'deals'. Il tool riproduce automaticamente il template (gruppo 'Revenue', colonne anno 2023B/2023A/2025–2030 con formati € e riga TOTALE con formula =SUM) e colloca l'importo di ogni deal nella colonna del suo anno di chiusura. Se HubSpot non è raggiungibile, usa 3 deal d'esempio per mostrarmi il formato.",
+  },
+  {
+    icon: "📄",
+    label: "Report PDF",
     prompt:
       "Genera un report PDF scaricabile dei deal aperti, con titolo, colonne Nome, Fase e Valore (€) e una riga TOTALE. Usa il tool create_pdf. Se HubSpot non è raggiungibile, usa 3 righe d'esempio per mostrarmi il formato.",
   },
   {
-    icon: '📑',
-    label: 'Presentazione',
+    icon: "📑",
+    label: "Presentazione",
     prompt:
       "Crea una presentazione PowerPoint scaricabile sulla pipeline 2026: una slide di sintesi con 3 punti chiave e una slide con la tabella dei deal per fase (valori in €). Usa il tool create_pptx. Se HubSpot non è raggiungibile, usa dati d'esempio.",
   },
   {
-    icon: '🧾',
-    label: 'Esporta CSV',
+    icon: "🧾",
+    label: "Esporta CSV",
     prompt:
       "Esporta in un file CSV scaricabile i contatti recenti, con colonne Nome, Email e Azienda. Usa il tool create_csv. Se HubSpot non è raggiungibile, usa 3 righe d'esempio.",
   },
   {
-    icon: '👤',
-    label: 'Contatti recenti',
-    prompt: 'Mostra i 5 contatti aggiunti più di recente',
+    icon: "👤",
+    label: "Contatti recenti",
+    prompt: "Mostra i 5 contatti aggiunti più di recente",
   },
   {
-    icon: '➕',
-    label: 'Crea deal',
-    prompt: 'Voglio creare un nuovo deal. Chiedimi i dettagli.',
+    icon: "➕",
+    label: "Crea deal",
+    prompt: "Voglio creare un nuovo deal. Chiedimi i dettagli.",
   },
   {
-    icon: '📝',
-    label: 'Crea nota',
-    prompt: 'Voglio aggiungere una nota a un contatto. Di chi si tratta?',
+    icon: "📝",
+    label: "Crea nota",
+    prompt: "Voglio aggiungere una nota a un contatto. Di chi si tratta?",
   },
 ];
 
