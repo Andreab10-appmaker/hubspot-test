@@ -104,22 +104,24 @@ export const ENTITIES: Record<CrmType, EntityConfig> = {
 };
 
 // Umanizza gli slug di fase noti di HubSpot (best-effort).
+// Fallback per slug noti HubSpot (usato solo se le opzioni live non coprono il
+// valore). Stage pipeline di default in inglese, per coerenza con le label live.
 const STAGE_LABELS: Record<string, string> = {
-  appointmentscheduled: "Appuntamento",
-  qualifiedtobuy: "Qualificato",
-  presentationscheduled: "Presentazione",
-  decisionmakerboughtin: "Decisore coinvolto",
-  contractsent: "Contratto inviato",
-  closedwon: "Vinta",
-  closedlost: "Persa",
+  appointmentscheduled: "Appointment Scheduled",
+  qualifiedtobuy: "Qualified To Buy",
+  presentationscheduled: "Presentation Scheduled",
+  decisionmakerboughtin: "Decision Maker Bought-In",
+  contractsent: "Contract Sent",
+  closedwon: "Closed Won",
+  closedlost: "Closed Lost",
   lead: "Lead",
-  marketingqualifiedlead: "MQL",
-  salesqualifiedlead: "SQL",
-  opportunity: "Opportunità",
-  customer: "Cliente",
-  subscriber: "Iscritto",
+  marketingqualifiedlead: "Marketing Qualified Lead",
+  salesqualifiedlead: "Sales Qualified Lead",
+  opportunity: "Opportunity",
+  customer: "Customer",
+  subscriber: "Subscriber",
   evangelist: "Evangelist",
-  other: "Altro",
+  other: "Other",
 };
 
 /**
