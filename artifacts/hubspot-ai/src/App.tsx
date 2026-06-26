@@ -19,11 +19,11 @@ const queryClient = new QueryClient({
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={Dashboard} />
+      <Route path="/" component={ChatInterface} />
+      <Route path="/dashboard" component={Dashboard} />
       <Route path="/companies" component={Companies} />
       <Route path="/contacts" component={Contacts} />
       <Route path="/deals" component={Deals} />
-      <Route path="/chat" component={ChatInterface} />
       <Route component={NotFound} />
     </Switch>
   );

@@ -16,11 +16,11 @@ interface NavItem {
 }
 
 const NAV: NavItem[] = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/", label: "Assistente", icon: Sparkles },
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/companies", label: "Aziende", icon: Building2 },
   { href: "/contacts", label: "Contatti", icon: Users },
   { href: "/deals", label: "Trattative", icon: Handshake },
-  { href: "/chat", label: "Assistente", icon: Sparkles },
 ];
 
 function isActive(current: string, href: string): boolean {
