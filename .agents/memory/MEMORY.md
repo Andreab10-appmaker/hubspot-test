@@ -1,0 +1,1 @@
+- [Prod has no npm registry](prod-no-npm-registry.md) — never spawn tools via `npx -y <pkg>` at runtime; resolve the installed package and run it with `node`.
