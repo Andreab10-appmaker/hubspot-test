@@ -68,6 +68,11 @@ catalog:
 
 autoInstallPeers: false
 
+peerDependencyRules:
+  ignoreMissing:
+    - tsx
+    - yaml
+
 onlyBuiltDependencies:
   - '@swc/core'
   - esbuild
