@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Sparkles, Settings2, ArrowUp, ShieldCheck, Zap } from 'lucide-react';
+import { Sparkles, Settings2, ArrowUp, ShieldCheck, Zap, MessageSquarePlus } from 'lucide-react';
 import { Message, ToolCall, ChartSpec, DownloadFile, ConfirmAction } from '../lib/types';
 import {
   PROVIDER_CONFIG,
@@ -30,14 +30,14 @@ const SUGGESTIONS = [
   'Distribuzione dei lead per fonte',
 ];
 
+const GREETING: Message = {
+  role: 'assistant',
+  content:
+    'Ciao 👋 Sono il tuo assistente HubSpot. Posso leggere e scrivere su deal, contatti e note (con conferma), generare grafici ed esportare report. Chiedimi pure.',
+};
+
 export default function ChatInterface() {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      role: 'assistant',
-      content:
-        'Ciao 👋 Sono il tuo assistente HubSpot. Posso leggere e scrivere su deal, contatti e note (con conferma), generare grafici ed esportare report. Chiedimi pure.',
-    },
-  ]);
+  const [messages, setMessages] = useState<Message[]>([GREETING]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [provider, setProvider] = useState<ProviderId>(DEFAULT_PROVIDER);
@@ -273,6 +273,23 @@ export default function ChatInterface() {
             {planMode ? 'Sola lettura · analizza e propone' : 'Operativo · può scrivere con conferma'}
           </p>
         </div>
+
+        {/* Nuova chat: azzera la conversazione */}
+        <Button
+          variant="ghost"
+          size="sm"
+          className="gap-1.5"
+          onClick={() => {
+            setMessages([GREETING]);
+            setInput('');
+          }}
+          disabled={loading}
+          data-testid="button-new-chat"
+          title="Avvia una nuova chat"
+        >
+          <MessageSquarePlus className="h-4 w-4" />
+          <span className="hidden sm:inline">Nuova chat</span>
+        </Button>
 
         {/* Plan/Operativo toggle */}
         <Button
