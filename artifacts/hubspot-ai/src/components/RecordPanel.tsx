@@ -6,6 +6,7 @@ import type { CrmRecord, CrmType } from "@/lib/api";
 import { useUpdateRecord } from "@/lib/api";
 import { initials, colorFromString, textColorFromString } from "@/lib/format";
 import FieldValue from "@/components/FieldValue";
+import ScheduleEditor from "@/components/ScheduleEditor";
 import {
   Sheet,
   SheetContent,
@@ -26,7 +27,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { useStageOrdered } from "@/lib/stage-context";
+import { useStageOrdered, useStageMap } from "@/lib/stage-context";
 import { cn } from "@/lib/utils";
 
 function toDateInput(value: string | null | undefined): string {
@@ -55,6 +56,9 @@ export default function RecordPanel({
   const dealStages = useStageOrdered("dealstage");
   const lifecycleStages = useStageOrdered("lifecyclestage");
   const contractTypes = useStageOrdered("contract_type");
+  // Mappa value→label delle fasi deal: serve a mostrare il sottotitolo SEMPRE
+  // parlante (evita "Fase 0900" quando il dealstage è un ID numerico).
+  const dealStageMap = useStageMap("dealstage");
   const stageOptionsFor = (key: string) =>
     key === "dealstage"
       ? dealStages
@@ -145,7 +149,7 @@ export default function RecordPanel({
               <div className="min-w-0 flex-1">
                 <SheetTitle className="truncate text-lg">{title}</SheetTitle>
                 <p className="truncate text-[13px] text-muted-foreground">
-                  {config.subtitle?.(record) || config.singular}
+                  {config.subtitle?.(record, dealStageMap) || config.singular}
                 </p>
               </div>
             </div>
@@ -159,7 +163,7 @@ export default function RecordPanel({
                 return (
                   <div
                     key={f.key}
-                    className="grid grid-cols-[120px_1fr] items-center gap-3 rounded-lg px-2 py-2 odd:bg-secondary/30"
+                    className="grid grid-cols-[120px_1fr] items-start gap-3 rounded-lg px-2 py-2 odd:bg-secondary/30"
                   >
                     <dt className="text-[12.5px] font-medium text-muted-foreground">
                       {f.label}
@@ -182,6 +186,38 @@ export default function RecordPanel({
                               </option>
                             ))}
                           </select>
+                        ) : f.kind === "schedule" ? (
+                          <ScheduleEditor
+                            value={edits[f.key] ?? ""}
+                            onChange={(json) =>
+                              setEdits((s) => ({ ...s, [f.key]: json }))
+                            }
+                          />
+                        ) : f.kind === "percent" ? (
+                          <div className="flex items-center gap-2">
+                            <Input
+                              type="number"
+                              min={0}
+                              max={100}
+                              step={5}
+                              value={
+                                edits[f.key] === "" || edits[f.key] == null
+                                  ? ""
+                                  : Math.round(Number(edits[f.key]) * 100)
+                              }
+                              onChange={(e) => {
+                                const raw = e.target.value;
+                                const pct = Math.min(100, Math.max(0, Number(raw)));
+                                setEdits((s) => ({
+                                  ...s,
+                                  [f.key]: raw === "" ? "" : String(pct / 100),
+                                }));
+                              }}
+                              className="h-9 w-24"
+                              data-testid={`edit-${f.key}`}
+                            />
+                            <span className="text-sm text-muted-foreground">%</span>
+                          </div>
                         ) : (
                           <Input
                             value={
