@@ -28,7 +28,7 @@ const RAW: Array<Record<string, string>> = [
   { deal_code: "HB-002", dealname: "Ryanair — Transfer Bergamo Orio", contract_owner: "G. Capuzzo", dealstage: "5602930905", closedate: "2025-06-01T00:00:00Z", contract_start: "2025-09-01", amount: "180000", contract_duration_years: "2", contract_type: "pluriennale_variabile", kpmg_note: "Revenue anno 2 da stimare", revenue_schedule: '{"2025":30000,"2026":90000,"2027":60000}' },
   { deal_code: "HB-003", dealname: "Interporto Verona — Shuttle Dipendenti", contract_owner: "M. Rossi", dealstage: "5602930905", closedate: "2024-11-20T00:00:00Z", contract_start: "2025-02-01", amount: "420000", contract_duration_years: "3", contract_type: "pluriennale_run_up", kpmg_note: "Struttura: 130k/150k/140k", revenue_schedule: '{"2025":119167,"2026":148750,"2027":140833,"2028":11250}' },
   { deal_code: "HB-004", dealname: "Fiera Milano — Navette Evento", contract_owner: "G. Capuzzo", dealstage: "5602930905", closedate: "2026-01-10T00:00:00Z", contract_start: "2026-03-01", amount: "85000", contract_duration_years: "1", contract_type: "spot", kpmg_note: "N/A", revenue_schedule: '{"2026":85000}' },
-  { deal_code: "HB-005", dealname: "ENI — Bus Aziendale Sede San Donato", contract_owner: "L. Ferrari", dealstage: "5602930901", closedate: "2026-04-30T00:00:00Z", contract_start: "2026-07-01", amount: "560000", contract_duration_years: "4", contract_type: "pluriennale_fisso", kpmg_note: "Budget approvato, attesa firma", revenue_schedule: '{"2026":70000,"2027":140000,"2028":140000,"2029":140000}' },
+  { deal_code: "HB-005", dealname: "ENI — Bus Aziendale Sede San Donato", contract_owner: "L. Ferrari", dealstage: "5602930901", closedate: "2026-04-30T00:00:00Z", contract_start: "2026-07-01", amount: "560000", contract_duration_years: "4", contract_type: "pluriennale_fisso", kpmg_note: "Budget approvato, attesa firma", revenue_schedule: '{"2026":70000,"2027":140000,"2028":140000,"2029":140000,"2030":70000}' },
   { deal_code: "HB-006", dealname: "Trenord — Feeder Service", contract_owner: "M. Rossi", dealstage: "5602930905", closedate: "2025-06-20T21:11:33.906Z", contract_start: "2026-01-01", amount: "240000", contract_duration_years: "2", contract_type: "pluriennale_rinnovo", kpmg_note: "KPMG ha chiesto breakdown", revenue_schedule: '{"2026":120000,"2027":120000}' },
   { deal_code: "HB-007", dealname: "Porto di Genova — Logistica Passeggeri", contract_owner: "G. Capuzzo", dealstage: "5602930900", closedate: "2026-06-15T00:00:00Z", contract_start: "2026-09-01", amount: "120000", contract_duration_years: "2", contract_type: "pluriennale_variabile", kpmg_note: "In valutazione", revenue_schedule: '{"2026":40000,"2027":80000}' },
 ];
@@ -94,11 +94,12 @@ async function main() {
   const sumYears = ds.years.reduce((a, y) => a + ds.revenueByYear[y], 0);
   check("totalScheduledRevenue == somma dei totali per anno", close(ds.totalScheduledRevenue, sumYears));
 
-  // HB-005 (ENI) deve essere segnalato: schedule 490k ≠ amount 560k.
+  // Dopo la correzione di ENI (schedule 560k == amount) NON deve restare alcun
+  // warning di riconciliazione: i dati HubSpot sono coerenti.
   check(
-    "warning su HB-005 (schedule ≠ amount) presente",
-    ds.warnings.some((w) => w.includes("HB-005")),
-    "incoerenza HubSpot esposta, non nascosta",
+    "nessun warning di riconciliazione (schedule == amount per tutti)",
+    ds.warnings.length === 0,
+    ds.warnings.length ? ds.warnings.join("; ") : "dati coerenti",
   );
 
   // --- B) Revenue Spreading .xlsx riporta gli stessi totali per anno ---
@@ -135,7 +136,7 @@ async function main() {
   });
   const ws = await readSheetYearTotals(peBuf, "Foglio1");
   // Colonne anno del template: M=2025(13) N=2026(14) O=2027(15) P=2028(16) Q=2029(17).
-  const TEMPLATE_COL: Record<number, number> = { 2025: 13, 2026: 14, 2027: 15, 2028: 16, 2029: 17 };
+  const TEMPLATE_COL: Record<number, number> = { 2025: 13, 2026: 14, 2027: 15, 2028: 16, 2029: 17, 2030: 18 };
   if (!ws) {
     check("foglio Foglio1 presente", false);
   } else {
