@@ -348,7 +348,7 @@ function stringifyProps(
   return out;
 }
 
-export async function updateObject(
+async function rawUpdate(
   type: CrmObjectType,
   id: string,
   properties: Record<string, unknown>,
@@ -362,6 +362,77 @@ export async function updateObject(
   const rec = toRecords(json.results)[0];
   if (!rec) throw new Error("Update HubSpot non ha restituito il record");
   return rec;
+}
+
+/**
+ * Quando un deal cambia FASE dall'app, registra la transizione REALE in
+ * `stage_history` (chiude la fase precedente con `exitedAt = oggi`, apre la nuova
+ * con `enteredAt = oggi`) e aggiorna `last_activity_date`. Così lo storico del
+ * funnel — usato dalle analisi — cresce con dati genuini, datati al momento del
+ * cambio. Best-effort: se i campi non esistono o la lettura fallisce, ritorna le
+ * property invariate e l'update procede comunque.
+ */
+async function augmentDealStageHistory(
+  id: string,
+  properties: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  const newStageId = String(properties.dealstage ?? "");
+  if (!newStageId) return properties;
+  try {
+    const current = await getObject("deals", id, [
+      "dealstage",
+      "stage_history",
+    ]);
+    const curStageId = current?.properties.dealstage || "";
+    if (!current || curStageId === newStageId) return properties; // nessun cambio
+    const stageLabels = new Map<string, string>();
+    try {
+      for (const o of await getPropertyOptions("deals", "dealstage"))
+        stageLabels.set(o.value, o.label);
+    } catch {
+      /* label = id se non risolvibile */
+    }
+    const newLabel = stageLabels.get(newStageId) || newStageId;
+    const today = new Date().toISOString().slice(0, 10);
+    const { parseStageHistory } = await import("./pipeline-dataset.js");
+    const history = parseStageHistory(current.properties.stage_history);
+    // Chiudi l'ultima fase aperta.
+    for (let i = history.length - 1; i >= 0; i--) {
+      if (!history[i].exitedAt) {
+        history[i] = { ...history[i], exitedAt: today };
+        break;
+      }
+    }
+    history.push({ stage: newLabel, enteredAt: today, exitedAt: null });
+    return {
+      ...properties,
+      stage_history: JSON.stringify(history),
+      last_activity_date: today,
+    };
+  } catch {
+    return properties; // best-effort: non bloccare l'update se l'arricchimento fallisce
+  }
+}
+
+export async function updateObject(
+  type: CrmObjectType,
+  id: string,
+  properties: Record<string, unknown>,
+): Promise<CrmRecord> {
+  // Sui deal con cambio fase, registra la transizione nello storico.
+  if (type === "deals" && properties.dealstage != null) {
+    const augmented = await augmentDealStageHistory(id, properties);
+    if (augmented !== properties) {
+      try {
+        return await rawUpdate(type, id, augmented);
+      } catch {
+        // Fallback: se l'update arricchito fallisce (es. campi non ancora creati),
+        // applica almeno le property richieste dall'utente.
+        return await rawUpdate(type, id, properties);
+      }
+    }
+  }
+  return rawUpdate(type, id, properties);
 }
 
 export async function createObject(
