@@ -110,6 +110,36 @@ const SPECS: Spec[] = [
   { code: "HB-025", name: "Eurostar — London Staff Shuttle", owner: "G. Capuzzo", source: "Outbound", country: "UK", amount: 200000, durationYears: 2, renewal: 0.6, schedule: { "2026": 100000, "2027": 100000 }, contractStart: "2026-11-15", lastActivityDaysAgo: 38, historyStart: "2026-02-20", history: [[APP, 25], [DISC, 33], [PROP, null]] },
 ];
 
+// Tipo contratto (valori enum HubSpot esistenti) + nota per ogni deal, coerenti
+// con i 7 originali. Tenuti qui così un seed da zero li ripristina identici.
+const EXTRA: Record<string, { contractType: string; note: string }> = {
+  "HB-001": { contractType: "pluriennale_fisso", note: "Incluso forecast 2025-2028" },
+  "HB-002": { contractType: "pluriennale_variabile", note: "Revenue anno 2 da stimare" },
+  "HB-003": { contractType: "pluriennale_run_up", note: "Struttura: 130k/150k/140k" },
+  "HB-004": { contractType: "spot", note: "N/A" },
+  "HB-005": { contractType: "pluriennale_fisso", note: "Budget approvato, attesa firma" },
+  "HB-006": { contractType: "pluriennale_rinnovo", note: "KPMG ha chiesto breakdown" },
+  "HB-007": { contractType: "pluriennale_variabile", note: "In valutazione" },
+  "HB-008": { contractType: "pluriennale_fisso", note: "Forecast 2025-2027 incluso" },
+  "HB-009": { contractType: "pluriennale_rinnovo", note: "Rinnovo triennale atteso" },
+  "HB-010": { contractType: "spot", note: "Servizio stagionale una tantum" },
+  "HB-011": { contractType: "pluriennale_fisso", note: "Budget pluriennale approvato" },
+  "HB-012": { contractType: "pluriennale_variabile", note: "Perso su prezzo, scelto competitor" },
+  "HB-013": { contractType: "spot", note: "Budget non confermato dal cliente" },
+  "HB-014": { contractType: "pluriennale_variabile", note: "Stop dopo proposta, no budget" },
+  "HB-015": { contractType: "pluriennale_fisso", note: "Perso in fase discovery" },
+  "HB-016": { contractType: "pluriennale_variabile", note: "Gara annullata dal cliente" },
+  "HB-017": { contractType: "pluriennale_fisso", note: "Proposta inviata, attesa risposta" },
+  "HB-018": { contractType: "pluriennale_run_up", note: "In gara, struttura a run-up" },
+  "HB-019": { contractType: "pluriennale_variabile", note: "Decisore coinvolto, follow-up in corso" },
+  "HB-020": { contractType: "pluriennale_rinnovo", note: "Discovery in corso" },
+  "HB-021": { contractType: "pluriennale_fisso", note: "Proposta in valutazione" },
+  "HB-022": { contractType: "spot", note: "Primo contatto, hub singolo" },
+  "HB-023": { contractType: "pluriennale_variabile", note: "Demo effettuata, attesa feedback" },
+  "HB-024": { contractType: "pluriennale_rinnovo", note: "Discovery, possibile rinnovo" },
+  "HB-025": { contractType: "pluriennale_variabile", note: "Proposta inviata" },
+};
+
 function authHeaders(token: string): Record<string, string> {
   return { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
 }
@@ -179,6 +209,12 @@ function propsFor(spec: Spec, stageIds: Map<string, string>): Record<string, str
   };
   // renewal_probability solo se definita: un numero vuoto fa fallire la POST.
   if (spec.renewal != null) props.renewal_probability = String(spec.renewal);
+  // contract_type + nota coerenti.
+  const extra = EXTRA[spec.code];
+  if (extra) {
+    props.contract_type = extra.contractType;
+    props.kpmg_note = extra.note;
+  }
   return props;
 }
 

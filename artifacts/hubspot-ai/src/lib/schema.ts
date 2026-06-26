@@ -8,7 +8,10 @@ export type FieldKind =
   | "number"
   | "currency"
   | "date"
-  | "stage";
+  | "stage"
+  | "schedule" // distribuzione fatturato per anno (JSON anno→importo)
+  | "history" // storico fasi (JSON array)
+  | "percent"; // valore 0–1 mostrato come %
 
 export interface FieldDef {
   key: string;
@@ -105,10 +108,10 @@ export const ENTITIES: Record<CrmType, EntityConfig> = {
       { key: "contract_type", label: "Tipo contratto", kind: "stage", editable: true },
       { key: "closedate", label: "Chiusura", kind: "date", column: true, editable: true, create: true },
       { key: "last_activity_date", label: "Ultima attività", kind: "date", editable: true },
-      { key: "renewal_probability", label: "Prob. rinnovo (0–1)", kind: "number", editable: true, create: true },
+      { key: "renewal_probability", label: "Probabilità di rinnovo", kind: "percent", editable: true, create: true },
       { key: "kpmg_note", label: "Note", editable: true, create: true },
-      { key: "revenue_schedule", label: "Revenue schedule (JSON)", editable: true },
-      { key: "stage_history", label: "Storico fasi (JSON)" },
+      { key: "revenue_schedule", label: "Distribuzione fatturato (per anno)", kind: "schedule", editable: true },
+      { key: "stage_history", label: "Storico fasi", kind: "history" },
       { key: "createdate", label: "Creata", kind: "date" },
     ],
   },
