@@ -9,6 +9,7 @@ import Dashboard from "@/pages/Dashboard";
 import Companies from "@/pages/Companies";
 import Contacts from "@/pages/Contacts";
 import Deals from "@/pages/Deals";
+import Insight from "@/pages/Insight";
 import ChatInterface from "@/components/ChatInterface";
 import NotFound from "@/pages/not-found";
 
@@ -23,6 +24,7 @@ function Router() {
       <Route path="/companies" component={Companies} />
       <Route path="/contacts" component={Contacts} />
       <Route path="/deals" component={Deals} />
+      <Route path="/insight" component={Insight} />
       <Route path="/chat" component={ChatInterface} />
       <Route component={NotFound} />
     </Switch>

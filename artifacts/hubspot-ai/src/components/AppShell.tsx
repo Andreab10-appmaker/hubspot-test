@@ -5,6 +5,7 @@ import {
   Users,
   Handshake,
   Sparkles,
+  LineChart,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -20,6 +21,7 @@ const NAV: NavItem[] = [
   { href: "/companies", label: "Aziende", icon: Building2 },
   { href: "/contacts", label: "Contatti", icon: Users },
   { href: "/deals", label: "Trattative", icon: Handshake },
+  { href: "/insight", label: "Insight", icon: LineChart },
   { href: "/chat", label: "Assistente", icon: Sparkles },
 ];
 

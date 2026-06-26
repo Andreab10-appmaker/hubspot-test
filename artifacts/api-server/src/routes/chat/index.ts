@@ -13,6 +13,7 @@ import {
   PIPELINE_EXPORT_TOOL,
   REVENUE_SPREADING_TOOL,
   PIPELINE_DATASET_TOOL,
+  DEAL_ANALYTICS_TOOL,
   CSV_TOOL,
   PDF_TOOL,
   PPTX_TOOL,
@@ -139,6 +140,7 @@ router.post("/completions", async (req, res) => {
   const tools: NormalizedTool[] = [
     ...mcpForMode,
     PIPELINE_DATASET_TOOL,
+    DEAL_ANALYTICS_TOOL,
     CHART_TOOL,
     EXCEL_TOOL,
     REVENUE_SPREADING_TOOL,
