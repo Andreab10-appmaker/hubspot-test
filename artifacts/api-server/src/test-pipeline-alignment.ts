@@ -104,7 +104,7 @@ async function main() {
   // --- B) Revenue Spreading .xlsx riporta gli stessi totali per anno ---
   console.log("\nB) Export Revenue Spreading (.xlsx) allineato al dataset");
   const rsBuf = await generateRevenueSpreading({ deals: ds.deals, cashYear: 2026 });
-  const s2 = await readSheetYearTotals(rsBuf, "2_Revenue_Spreading_AiPow");
+  const s2 = await readSheetYearTotals(rsBuf, "2_Revenue_Spreading");
   if (!s2) {
     check("foglio Revenue Spreading presente", false);
   } else {
