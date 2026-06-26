@@ -9,6 +9,7 @@ import {
   getPropertyOptions,
 } from "../../lib/hubspot-crm.js";
 import { buildDealAnalytics } from "../../lib/deal-analytics.js";
+import { buildPipelineDataset } from "../../lib/pipeline-dataset.js";
 
 const router = Router();
 
@@ -27,6 +28,47 @@ function fail(res: import("express").Response, err: unknown) {
 router.get("/dashboard/summary", async (_req, res) => {
   try {
     res.json(await getDashboardSummary());
+  } catch (err) {
+    fail(res, err);
+  }
+});
+
+// GET /api/crm/revenue — fatturato contrattualizzato + proiezione, con il
+// dettaglio per-deal per ogni anno (alimenta il grafico drill-down).
+router.get("/revenue", async (_req, res) => {
+  try {
+    const ds = await buildPipelineDataset();
+    const totalProjected = Object.values(ds.projectedByYear).reduce(
+      (a, b) => a + b,
+      0,
+    );
+    res.json({
+      years: ds.years,
+      projectionYears: ds.projectionYears,
+      revenueByYear: ds.years.map((year) => ({
+        year,
+        value: ds.revenueByYear[year] || 0,
+      })),
+      projectedByYear: ds.projectionYears.map((year) => ({
+        year,
+        value: ds.projectedByYear[year] || 0,
+      })),
+      totalScheduled: ds.totalScheduledRevenue,
+      totalProjected,
+      assumptions: ds.projectionAssumptions,
+      deals: ds.deals.map((d) => ({
+        code: d.code,
+        name: d.name,
+        country: d.country,
+        stage: d.stageLabel,
+        owner: d.owner,
+        amount: d.amount,
+        scheduledTotal: d.scheduledTotal,
+        renewalProbability: d.renewalProbability,
+        schedule: d.schedule,
+        projectedSchedule: d.projectedSchedule,
+      })),
+    });
   } catch (err) {
     fail(res, err);
   }
