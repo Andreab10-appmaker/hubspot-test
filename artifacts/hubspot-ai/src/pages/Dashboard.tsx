@@ -30,6 +30,21 @@ export default function Dashboard() {
       }
     : null;
 
+  // Fatturato per anno (revenue spreading): STESSA fonte dell'Excel e dell'AI.
+  const revenueChart: ChartSpec | null =
+    data && data.revenueByYear && data.revenueByYear.length > 0
+      ? {
+          id: "revenue-by-year",
+          type: "bar",
+          title: "Fatturato per anno (revenue spreading)",
+          valueFormat: "currency",
+          data: data.revenueByYear.map((r) => ({
+            label: String(r.year),
+            value: r.value,
+          })),
+        }
+      : null;
+
   return (
     <div className="space-y-5">
       {/* Header */}
@@ -104,14 +119,21 @@ export default function Dashboard() {
 
       {/* Chart + recent */}
       <div className="grid gap-4 lg:grid-cols-3">
-        <div className="rounded-2xl border border-card-border bg-card p-4 shadow-xs lg:col-span-2">
-          {isLoading ? (
-            <Skeleton className="h-[260px] w-full" />
-          ) : chart && chart.data.length > 0 ? (
-            <ChartView spec={chart} />
-          ) : (
-            <div className="grid h-[260px] place-items-center text-sm text-muted-foreground">
-              Nessun dato di pipeline da mostrare.
+        <div className="space-y-4 lg:col-span-2">
+          <div className="rounded-2xl border border-card-border bg-card p-4 shadow-xs">
+            {isLoading ? (
+              <Skeleton className="h-[260px] w-full" />
+            ) : chart && chart.data.length > 0 ? (
+              <ChartView spec={chart} />
+            ) : (
+              <div className="grid h-[260px] place-items-center text-sm text-muted-foreground">
+                Nessun dato di pipeline da mostrare.
+              </div>
+            )}
+          </div>
+          {!isLoading && revenueChart && revenueChart.data.length > 0 && (
+            <div className="rounded-2xl border border-card-border bg-card p-4 shadow-xs">
+              <ChartView spec={revenueChart} />
             </div>
           )}
         </div>

@@ -1,14 +1,13 @@
 import ExcelJS from "exceljs";
 
 /**
- * Generatore "Revenue Spreading" (3 fogli) — replica del template
- * iBusForFun_Demo_Revenue_Spreading.xlsx.
+ * Generatore "Revenue Spreading" (3 fogli, output professionale e neutro).
  *
- * Risolve il problema di Gabriele: il valore nominale del deal non riflette il
- * fatturato pluriennale reale (closing date ≠ inizio fatturazione, importi
- * diversi per anno con run-up). A partire dai campi HubSpot del deal
- * (contract_start, durata, importo, revenue_schedule per-anno) produce:
- *   1) HubSpot Export — situazione attuale (il problema)
+ * Il valore nominale del deal (amount) non riflette il fatturato pluriennale:
+ * la closing date non coincide con l'inizio fatturazione e gli importi variano
+ * per anno. A partire dai campi HubSpot del deal (contract_start, durata,
+ * importo, revenue_schedule per-anno) produce:
+ *   1) Deal — pipeline HubSpot (anagrafica e importo nominale)
  *   2) Revenue Spreading — fatturato per anno
  *   3) Cash Flow Mensile — fatturato per mese dell'anno target (default 2026)
  */
@@ -129,43 +128,38 @@ export async function generateRevenueSpreading(
     for (const y of Object.keys(d.schedule || {})) yearSet.add(parseInt(y, 10));
   const years = [...yearSet].filter((y) => y).sort((a, b) => a - b);
 
-  // ===== Foglio 1: HubSpot Export (situazione attuale) =====================
-  const s1 = wb.addWorksheet("1_HubSpot_Export");
-  s1.columns = [10, 28, 16, 14, 14, 14, 16, 10, 16, 22, 18].map((w) => ({ width: w }));
-  s1.mergeCells("A1:K1");
-  setRow(s1, 1, ["📋  HubSpot Export — Pipeline Deals (SITUAZIONE ATTUALE)"], {
+  // ===== Foglio 1: Deal dalla pipeline HubSpot =============================
+  const s1 = wb.addWorksheet("1_Deal_HubSpot");
+  s1.columns = [10, 28, 16, 14, 14, 14, 16, 10, 16, 22].map((w) => ({ width: w }));
+  s1.mergeCells("A1:J1");
+  setRow(s1, 1, ["Deal — Pipeline HubSpot"], {
     bg: C.navy, fontColor: C.white, bold: true, size: 13, height: 27.75,
     align: { horizontal: "center", vertical: "middle", wrapText: true },
   });
-  s1.mergeCells("A2:K2");
   setRow(s1, 2, [
-    "⚠️  Problema: il valore deal non riflette il fatturato pluriennale reale. Closing date ≠ inizio fatturazione. Ogni revisione KPMG richiede ricostruzione manuale.",
-  ], { bg: C.amber, fontColor: C.amberText, height: 30, align: { horizontal: "center", vertical: "middle", wrapText: true } });
-  setRow(s1, 3, [
     "Deal ID", "Deal Name", "Owner", "Stage", "Closing Date", "Contract Start",
-    "Deal Amount (€)", "Duration\n(anni)", "Tipo Contratto", "Note KPMG", "⚠️ Fatturato Anno 2?",
+    "Deal Amount (€)", "Duration\n(anni)", "Tipo Contratto", "Note",
   ], { bg: C.navy, fontColor: C.white, bold: true, height: 36, align: { horizontal: "center", vertical: "middle", wrapText: true } });
 
-  let r = 4;
+  let r = 3;
   for (const d of deals) {
-    const flag = d.durationYears <= 1 ? "✅ OK (1 anno)" : "❌ Anno 2+ mancanti";
     setRow(s1, r++, [
       d.code, d.name, d.owner, d.stageLabel, isoDate(d.closingDate),
-      isoDate(d.contractStart), d.amount, d.durationYears, d.typeLabel, d.kpmgNote, flag,
-    ], { bg: C.rowRed, height: 21.75, align: { vertical: "middle" }, eurCols: [7] });
+      isoDate(d.contractStart), d.amount, d.durationYears, d.typeLabel, d.kpmgNote,
+    ], { bg: C.white, height: 21.75, align: { vertical: "middle" }, eurCols: [7] });
   }
   s1.mergeCells(`A${r}:F${r}`);
   const t1 = setRow(s1, r, [
-    "TOTALE PIPELINE (valore contrattuale nominale — NON il fatturato annuo)",
-  ], { bg: C.orange, fontColor: C.white, bold: true, height: 18, align: { horizontal: "right", vertical: "middle" } });
+    "TOTALE (valore contrattuale nominale)",
+  ], { bg: C.navy, fontColor: C.white, bold: true, height: 18, align: { horizontal: "right", vertical: "middle" } });
   const g1 = t1.getCell(7);
-  g1.value = { formula: `SUM(G4:G${r - 1})` };
-  fill(g1, C.orange);
+  g1.value = { formula: `SUM(G3:G${r - 1})` };
+  fill(g1, C.navy);
   g1.font = { bold: true, size: 9, color: { argb: C.white } };
   g1.numFmt = EUR;
 
   // ===== Foglio 2: Revenue Spreading per anno =============================
-  const s2 = wb.addWorksheet("2_Revenue_Spreading_AiPow");
+  const s2 = wb.addWorksheet("2_Revenue_Spreading");
   const infoW = [10, 28, 14, 14, 13, 13, 9, 16];
   s2.columns = [...infoW, ...years.map(() => 14), 16].map((w) => ({ width: w }));
   const lastCol2 = 8 + years.length + 1; // colonne totali
@@ -173,12 +167,12 @@ export async function generateRevenueSpreading(
   const L = (n: number) => colLetter(n);
 
   s2.mergeCells(1, 1, 1, lastCol2);
-  setRow(s2, 1, ["✅  Revenue Spreading Automatico — AiPow Demo  |  Fatturato pluriennale per deal, per anno"], {
+  setRow(s2, 1, ["Revenue Spreading — Fatturato pluriennale per anno"], {
     bg: C.green, fontColor: C.white, bold: true, size: 13, height: 27.75,
     align: { horizontal: "center", vertical: "middle", wrapText: true },
   });
   s2.mergeCells(2, 1, 2, lastCol2);
-  setRow(s2, 2, ["🚀  Generato automaticamente da HubSpot: niente più Google Sheet manuali. Ogni revisione KPMG: 1 click."], {
+  setRow(s2, 2, ["Fatturato di ogni deal suddiviso per anno (campo revenue_schedule di HubSpot)."], {
     bg: C.greenLight, fontColor: C.greenText, height: 21.75,
     align: { horizontal: "center", vertical: "middle", wrapText: true },
   });
@@ -265,12 +259,12 @@ export async function generateRevenueSpreading(
   s3.columns = [32, ...Array(12).fill(10), 12].map((w) => ({ width: w }));
   const MONTHS = ["Gen", "Feb", "Mar", "Apr", "Mag", "Giu", "Lug", "Ago", "Set", "Ott", "Nov", "Dic"];
   s3.mergeCells("A1:N1");
-  setRow(s3, 1, [`💰  Cash Flow Mensile ${cashYear} — Fatturato atteso per mese (da revenue spreading)`], {
+  setRow(s3, 1, [`Cash Flow Mensile ${cashYear} — Fatturato atteso per mese`], {
     bg: C.red, fontColor: C.white, bold: true, size: 13, height: 27.75,
     align: { horizontal: "center", vertical: "middle", wrapText: true },
   });
   s3.mergeCells("A2:N2");
-  setRow(s3, 2, ["Uso personale Gabriele: forecast mensile cash flow e breakdown per cliente. Base per revisioni business plan KPMG."], {
+  setRow(s3, 2, ["Forecast mensile del fatturato per deal, derivato dal revenue spreading."], {
     bg: C.rowRed, fontColor: C.redText, height: 19.5, align: { horizontal: "center", vertical: "middle", wrapText: true },
   });
   setRow(s3, 3, ["Deal / Cliente", ...MONTHS, `TOT ${cashYear}`], {

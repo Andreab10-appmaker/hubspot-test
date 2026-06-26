@@ -26,6 +26,13 @@ export interface PipelineExportDeal {
   closeYear?: number | string | null;
   /** Data di chiusura ISO (es. "2026-12-31..."): se presente, ne ricavo l'anno. */
   closeDate?: string | null;
+  /**
+   * Suddivisione canonica del fatturato per anno (anno→importo), dal dataset
+   * pipeline (revenue_schedule). Se presente è LA verità: ogni importo va nella
+   * colonna del suo anno. Così questo export coincide con il Revenue Spreading.
+   * Se assente, si ripiega su amount+closeDate (comportamento storico).
+   */
+  schedule?: Record<string, number> | null;
 }
 
 export interface PipelineExportSpec {
@@ -193,10 +200,26 @@ export async function generatePipelineExport(
     const row = ws.getRow(r);
     row.getCell(NAME_COL).value = (deal.name ?? "").toString();
 
-    const year = resolveYear(deal);
-    const amount = toAmount(deal.amount);
-    if (year != null && amount != null && YEAR_TO_COL[year]) {
-      row.getCell(YEAR_TO_COL[year]).value = amount;
+    const schedule = deal.schedule || undefined;
+    const hasSchedule = schedule && Object.keys(schedule).length > 0;
+    if (hasSchedule) {
+      // Verità canonica: colloca il fatturato di ciascun anno nella sua colonna.
+      for (const [yStr, vRaw] of Object.entries(schedule)) {
+        const y = Number(yStr);
+        const v = toAmount(vRaw);
+        if (v == null) continue;
+        const col = YEAR_TO_COL[y];
+        if (col) row.getCell(col).value = v;
+        // Anni fuori dal template fisso (es. 2024) non hanno colonna: ignorati
+        // nel layout ufficiale ma comunque presenti nel Revenue Spreading.
+      }
+    } else {
+      // Fallback storico: importo intero nell'anno di chiusura.
+      const year = resolveYear(deal);
+      const amount = toAmount(deal.amount);
+      if (year != null && amount != null && YEAR_TO_COL[year]) {
+        row.getCell(YEAR_TO_COL[year]).value = amount;
+      }
     }
 
     // Formati numerici su tutte le colonne anno (anche se vuote).
