@@ -208,8 +208,24 @@ export default function RevenueChart() {
         </ResponsiveContainer>
       </div>
 
-      <p className="mt-1 px-1 text-[11.5px] text-muted-foreground">
-        Tocca una colonna per vedere il dettaglio deal per deal di quell'anno.
+      {/* Metodologia della proiezione — sempre visibile, in chiaro */}
+      <div className="mt-3 flex gap-2.5 rounded-2xl bg-indigo-50/60 p-3 text-[12px] leading-relaxed text-slate-600">
+        <Info className="mt-0.5 h-4 w-4 shrink-0 text-indigo-500" />
+        <div>
+          <span className="font-semibold text-slate-800">Come calcoliamo la proiezione.</span>{" "}
+          Per ogni deal prendiamo il fatturato di un <b>anno pieno</b> (run-rate) e lo
+          ripetiamo per <b>3 anni</b> dopo la fine del contratto, moltiplicato per la{" "}
+          <b>probabilità di rinnovo</b> del deal.{" "}
+          <span className="whitespace-nowrap rounded-md bg-white px-1.5 py-0.5 font-medium text-indigo-700 ring-1 ring-indigo-100">
+            es. 140.000&nbsp;€ × 75% = 105.000&nbsp;€/anno
+          </span>{" "}
+          I contratti <b>spot</b> e i deal <b>persi</b> non vengono proiettati. È una
+          stima, distinta dal fatturato già contrattualizzato.
+        </div>
+      </div>
+
+      <p className="mt-2 px-1 text-[11.5px] text-muted-foreground">
+        Tocca una colonna per il dettaglio deal per deal — con il calcolo della stima.
       </p>
 
       {selected != null && data && (
@@ -294,7 +310,16 @@ function YearDetail({
   const rows = useMemo(() => {
     const y = String(year);
     return data.deals
-      .map((d) => ({ d, c: d.schedule[y] || 0, p: d.projectedSchedule[y] || 0 }))
+      .map((d) => {
+        const runRate = Math.max(0, ...Object.values(d.schedule).map((v) => Number(v) || 0));
+        return {
+          d,
+          c: d.schedule[y] || 0,
+          p: d.projectedSchedule[y] || 0,
+          runRate,
+          pct: Math.round((Number(d.renewalProbability) || 0) * 100),
+        };
+      })
       .filter((r) => r.c > 0 || r.p > 0)
       .sort((a, b) => b.c + b.p - (a.c + a.p));
   }, [data, year]);
@@ -365,11 +390,18 @@ function YearDetail({
                 </span>
                 <span className="shrink-0 text-[11px] text-slate-400">{r.d.stage}</span>
               </div>
+              {/* Calcolo esplicito della stima, deal per deal */}
+              {r.p > 0 && (
+                <div className="mt-1 text-[10.5px] text-indigo-500">
+                  stima rinnovo: {fmtEur(r.runRate)} × {r.pct}% ={" "}
+                  <b className="text-indigo-600">{fmtEur(r.p)}</b>/anno
+                </div>
+              )}
             </div>
             <div className="shrink-0 text-right">
               <div className="text-[13.5px] font-bold tabular-nums text-slate-900">{fmtEur(r.c + r.p)}</div>
               <div className="text-[10.5px] tabular-nums text-slate-400">
-                {r.c > 0 && <span>{fmtEur(r.c)}</span>}
+                {r.c > 0 && <span>{fmtEur(r.c)} contratt.</span>}
                 {r.p > 0 && <span className="text-indigo-400"> +{fmtEur(r.p)} stima</span>}
               </div>
             </div>
