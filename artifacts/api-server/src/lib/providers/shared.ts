@@ -4,6 +4,8 @@ import {
   generatePipelineExport,
   type PipelineExportSpec,
 } from "../pipeline-export.js";
+import { generateRevenueSpreading } from "../revenue-spreading.js";
+import { buildPipelineDataset } from "../pipeline-dataset.js";
 import { generateCsv, type CsvSpec } from "../csv.js";
 import { generatePdf, type PdfSpec } from "../pdf.js";
 import { generatePptx, type PptxSpec } from "../pptx.js";
@@ -28,6 +30,8 @@ export interface RunOptions {
 export const CHART_TOOL_NAME = "render_chart";
 export const EXCEL_TOOL_NAME = "create_excel";
 export const PIPELINE_EXPORT_TOOL_NAME = "create_pipeline_export";
+export const REVENUE_SPREADING_TOOL_NAME = "create_revenue_spreading";
+export const PIPELINE_DATASET_TOOL_NAME = "get_pipeline_dataset";
 export const CSV_TOOL_NAME = "create_csv";
 export const PDF_TOOL_NAME = "create_pdf";
 export const PPTX_TOOL_NAME = "create_pptx";
@@ -37,6 +41,7 @@ export const OUTPUT_TOOLS = new Set<string>([
   CHART_TOOL_NAME,
   EXCEL_TOOL_NAME,
   PIPELINE_EXPORT_TOOL_NAME,
+  REVENUE_SPREADING_TOOL_NAME,
   CSV_TOOL_NAME,
   PDF_TOOL_NAME,
   PPTX_TOOL_NAME,
@@ -213,6 +218,48 @@ export const PIPELINE_EXPORT_TOOL: NormalizedTool = {
       },
     },
     required: ["filename", "deals"],
+  },
+};
+
+export const PIPELINE_DATASET_TOOL: NormalizedTool = {
+  name: PIPELINE_DATASET_TOOL_NAME,
+  description:
+    "FONTE DI VERITÀ della pipeline. Restituisce il dataset canonico dei deal " +
+    "calcolato DIRETTAMENTE dal server (stessa identica logica degli export Excel " +
+    "'Revenue Spreading'/'Pipeline' e della dashboard): per ogni deal il fatturato " +
+    "è già suddiviso per anno (revenue spreading), più i totali per anno, per fase, " +
+    "vinto/aperto e le eventuali incoerenze. USA SEMPRE questo tool per QUALSIASI " +
+    "domanda su pipeline, fatturato/incassi per anno, forecast, split pluriennale, " +
+    "valore per fase: NON ricavare i numeri a mano dai tool MCP e NON inventare una " +
+    "tua suddivisione. I numeri che riporti all'utente DEVONO essere questi, così " +
+    "coincidono con l'Excel scaricabile. Lo split per anno = campo revenue_schedule " +
+    "del deal (con fallback deterministico se assente).",
+  inputSchema: { type: "object", properties: {} },
+};
+
+export const REVENUE_SPREADING_TOOL: NormalizedTool = {
+  name: REVENUE_SPREADING_TOOL_NAME,
+  description:
+    'Genera l\'export ufficiale "Revenue Spreading" (.xlsx, 3 fogli: HubSpot ' +
+    "Export, Revenue Spreading per anno, Cash Flow mensile) — IDENTICO al file che " +
+    "l'utente scarica dal pulsante 'Esporta Revenue Spreading' dell'interfaccia. " +
+    "I dati vengono letti dal server dal dataset canonico HubSpot: NON devi passare " +
+    "i deal, ci pensa il tool. USA QUESTO TOOL quando l'utente chiede di esportare/" +
+    "scaricare la pipeline, il revenue spreading, il fatturato pluriennale o il cash " +
+    "flow. È l'unico modo per garantire che il file coincida con interfaccia e " +
+    "assistente. NON usare create_excel o create_pipeline_export per il revenue spreading.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      filename: {
+        type: "string",
+        description: "Nome file SENZA estensione (default 'revenue-spreading').",
+      },
+      cashYear: {
+        type: "number",
+        description: "Anno del foglio Cash Flow mensile (default 2026).",
+      },
+    },
   },
 };
 
@@ -427,21 +474,39 @@ distribuzioni). NON inventare numeri: recupera prima i dati reali da HubSpot,
 aggrega e poi passa i valori. line/area per serie temporali, bar per confronti,
 pie per composizioni. valueFormat "currency" per €, "percent" per percentuali.
 
+PIPELINE E FATTURATO — FONTE DI VERITÀ UNICA (REGOLA FERREA):
+Per QUALSIASI domanda su pipeline, fatturato/incassi per anno, forecast, "split"
+pluriennale, revenue spreading, valore per fase o cash flow, DEVI prima chiamare
+"get_pipeline_dataset". Quel tool restituisce i dati canonici calcolati dal server
+con la STESSA identica logica degli export Excel e della dashboard. I numeri e lo
+SPLIT per anno che riporti all'utente devono essere ESATTAMENTE quelli del dataset
+(campo scheduleByYear di ogni deal e revenueByYear per i totali). NON ricavare il
+fatturato per anno a mano dall'amount o dalla data di chiusura, NON applicare criteri
+tuoi: lo split è già fatto (revenue_schedule). Così le tue risposte coincidono
+sempre con l'Excel che l'utente scarica. Se il dataset segnala warning (es. schedule
+che non somma all'amount), puoi menzionarli.
+Quando l'utente vuole SCARICARE/esportare la pipeline o il revenue spreading, usa
+"create_revenue_spreading" (genera lo stesso file del pulsante dell'interfaccia):
+NON costruirlo a mano con create_excel.
+
 EXPORT E FILE SCARICABILI:
 Hai tool che generano file scaricabili mostrati come pulsante di download:
-- create_excel → foglio Excel (.xlsx) generico con formule e formati
-- create_pipeline_export → export UFFICIALE "Pipeline Export" (.xlsx): template
-  finanziario aziendale (gruppo "Revenue", colonne anno 2023B/2023A/2025–2030,
-  € contabili, riga TOTALE con =SUM). Usalo SOLO per la "Pipeline Export"/export
-  della pipeline nel formato ufficiale: recupera i deal reali (nome, amount,
-  closedate) e passali in "deals", la formattazione la fa il tool.
+- create_revenue_spreading → export UFFICIALE "Revenue Spreading" (.xlsx, 3 fogli):
+  IDENTICO al download dell'interfaccia. È la scelta giusta per esportare pipeline,
+  fatturato pluriennale, revenue spreading o cash flow. I dati li legge il server.
+- create_excel → foglio Excel (.xlsx) generico con formule e formati (per tabelle
+  NON legate alla pipeline/revenue spreading).
+- create_pipeline_export → export "Pipeline Export" (.xlsx) nel template a colonne
+  anno fisse 2023B/2023A/2025–2030. Se lo usi, passa per ogni deal anche "schedule"
+  (anno→importo) preso da get_pipeline_dataset, così coincide col Revenue Spreading.
 - create_csv → dati grezzi tabellari (.csv)
 - create_pdf → report PDF stampabile (titolo + tabella formattata)
 - create_pptx → presentazione PowerPoint (.pptx) con slide, elenchi e tabelle
 REGOLA FERREA: se l'utente chiede di "esportare", "scaricare", un file, un report,
 un foglio di calcolo, un PDF o una presentazione, DEVI chiamare il tool adatto — non
-limitarti a elencare i dati nel testo. Scegli il formato dall'intento: "excel/foglio"
-→ create_excel; "csv/dati grezzi" → create_csv; "report/pdf/stampabile" → create_pdf;
+limitarti a elencare i dati nel testo. Scegli il formato dall'intento: pipeline/
+revenue/forecast → create_revenue_spreading; "excel/foglio" generico → create_excel;
+"csv/dati grezzi" → create_csv; "report/pdf/stampabile" → create_pdf;
 "presentazione/slide/deck" → create_pptx. Preferisci dati reali da HubSpot; se il CRM
 non è disponibile, usa i dati già in conversazione o forniti dall'utente, senza
 bloccarti. Per Excel: intestazioni chiare, numberFormat adeguato (€, %, date) e
@@ -527,6 +592,22 @@ const FILE_GENERATORS: Record<string, FileGenerator> = {
     label: "Pipeline Export",
     gen: (a) => generatePipelineExport(a as unknown as PipelineExportSpec),
   },
+  [REVENUE_SPREADING_TOOL_NAME]: {
+    ext: "xlsx",
+    mimeType:
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    label: "Revenue Spreading",
+    // Ignora eventuali dati passati dall'LLM: legge SEMPRE il dataset canonico
+    // dal server, così il file è identico a quello scaricato dall'interfaccia.
+    gen: async (a) => {
+      const dataset = await buildPipelineDataset();
+      const cashYear = Number((a as { cashYear?: unknown }).cashYear);
+      return generateRevenueSpreading({
+        deals: dataset.deals,
+        cashYear: Number.isFinite(cashYear) ? cashYear : 2026,
+      });
+    },
+  },
   [CSV_TOOL_NAME]: {
     ext: "csv",
     mimeType: "text/csv;charset=utf-8",
@@ -566,6 +647,55 @@ export async function executeTool(
       content: "Grafico mostrato correttamente nell'interfaccia utente.",
       isError: false,
     };
+  }
+
+  if (name === PIPELINE_DATASET_TOOL_NAME) {
+    logger.info({ tool: name }, "[tool] get_pipeline_dataset invocato");
+    try {
+      const ds = await buildPipelineDataset();
+      // Payload compatto e già "parlante" per il modello: gli stessi numeri
+      // dell'Excel. Lo split per anno è in `schedule` di ogni deal.
+      const payload = {
+        methodology:
+          "Split del fatturato per anno = campo revenue_schedule del deal " +
+          "(fallback deterministico se assente). Stessa logica degli export " +
+          "Excel e della dashboard. Usa SOLO questi numeri.",
+        totals: {
+          deals: ds.deals.length,
+          totalContractValue: ds.totalContractValue,
+          totalScheduledRevenue: ds.totalScheduledRevenue,
+          open: ds.open,
+          won: ds.won,
+        },
+        revenueByYear: ds.years.map((year) => ({
+          year,
+          value: ds.revenueByYear[year] || 0,
+        })),
+        byStage: ds.byStage,
+        deals: ds.deals.map((d) => ({
+          code: d.code,
+          name: d.name,
+          owner: d.owner,
+          stage: d.stageLabel,
+          type: d.typeLabel,
+          closingDate: d.closingDate,
+          contractStart: d.contractStart,
+          durationYears: d.durationYears,
+          amount: d.amount,
+          scheduleByYear: d.schedule,
+          scheduledTotal: d.scheduledTotal,
+          scheduleSource: d.scheduleSource,
+        })),
+        warnings: ds.warnings,
+      };
+      return { content: JSON.stringify(payload), isError: false };
+    } catch (err) {
+      logger.error({ err, tool: name }, "[tool] get_pipeline_dataset fallito");
+      return {
+        content: `Errore lettura dataset pipeline: ${String(err)}`,
+        isError: true,
+      };
+    }
   }
 
   const fileGen = FILE_GENERATORS[name];

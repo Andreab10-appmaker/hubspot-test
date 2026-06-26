@@ -386,6 +386,9 @@ export interface DashboardSummary {
     count: number;
     value: number;
   }>;
+  // Fatturato canonico per anno (revenue spreading) — stessa fonte di Excel e AI.
+  revenueByYear: Array<{ year: number; value: number }>;
+  totalScheduledRevenue: number;
   recentContacts: Array<{
     id: string;
     name: string;
@@ -394,69 +397,17 @@ export interface DashboardSummary {
   }>;
 }
 
-// Label leggibili per gli stage della pipeline HubSpot DI DEFAULT (slug legacy
-// non più presenti nella pipeline corrente ma ancora su qualche deal).
-const DEFAULT_DEAL_STAGE_SLUGS: Record<string, string> = {
-  appointmentscheduled: "Appointment Scheduled",
-  qualifiedtobuy: "Qualified To Buy",
-  presentationscheduled: "Presentation Scheduled",
-  decisionmakerboughtin: "Decision Maker Bought-In",
-  contractsent: "Contract Sent",
-  closedwon: "Closed Won",
-  closedlost: "Closed Lost",
-};
-
-function num(v: unknown): number {
-  const n = Number(String(v ?? "").replace(/[^0-9.-]/g, ""));
-  return Number.isFinite(n) ? n : 0;
-}
-
-function isWonStage(stage: string): boolean {
-  return /won/i.test(stage);
-}
-function isClosedStage(stage: string): boolean {
-  return /closed(won|lost)?|won|lost/i.test(stage);
-}
-
 export async function getDashboardSummary(): Promise<DashboardSummary> {
-  const [companies, contacts, deals] = await Promise.all([
+  // Le KPI dei deal (pipeline aperta, vinto, per fase, fatturato per anno) vengono
+  // dal DATASET CANONICO, così la dashboard coincide sempre con gli export Excel e
+  // con l'assistente AI. Import dinamico per evitare cicli a load-time.
+  const { buildPipelineDataset } = await import("./pipeline-dataset.js");
+
+  const [companies, contacts, dataset] = await Promise.all([
     listAll("companies", ["name"]),
     listAll("contacts", DEFAULT_PROPERTIES.contacts),
-    listAll("deals", DEFAULT_PROPERTIES.deals),
+    buildPipelineDataset(),
   ]);
-
-  // Mappa value→label degli stati deal (best-effort: se fallisce, label = value).
-  const stageLabels = new Map<string, string>();
-  try {
-    const opts = await getPropertyOptions("deals", "dealstage");
-    for (const o of opts) stageLabels.set(o.value, o.label);
-  } catch {
-    /* fallback sotto */
-  }
-  const resolveStage = (stage: string) =>
-    stageLabels.get(stage) || DEFAULT_DEAL_STAGE_SLUGS[stage] || stage;
-
-  const byStage = new Map<string, { count: number; value: number }>();
-  let pipelineValue = 0;
-  let wonValue = 0;
-  let openDeals = 0;
-
-  for (const d of deals) {
-    const stage = d.properties.dealstage || "—";
-    // Won/closed si determinano sulla LABEL ("Closed Won"/"Closed Lost"),
-    // non sull'ID numerico dello stage.
-    const lbl = resolveStage(stage);
-    const amount = num(d.properties.amount);
-    const entry = byStage.get(stage) || { count: 0, value: 0 };
-    entry.count += 1;
-    entry.value += amount;
-    byStage.set(stage, entry);
-    if (isWonStage(lbl)) wonValue += amount;
-    if (!isClosedStage(lbl)) {
-      pipelineValue += amount;
-      openDeals += 1;
-    }
-  }
 
   const recentContacts = [...contacts]
     .sort((a, b) =>
@@ -482,17 +433,17 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
     counts: {
       companies: companies.length,
       contacts: contacts.length,
-      deals: deals.length,
+      deals: dataset.deals.length,
     },
-    pipelineValue,
-    wonValue,
-    openDeals,
-    dealsByStage: [...byStage.entries()].map(([stage, v]) => ({
-      stage,
-      stageLabel: resolveStage(stage),
-      count: v.count,
-      value: v.value,
+    pipelineValue: dataset.open.value,
+    wonValue: dataset.won.value,
+    openDeals: dataset.open.count,
+    dealsByStage: dataset.byStage,
+    revenueByYear: dataset.years.map((year) => ({
+      year,
+      value: dataset.revenueByYear[year] || 0,
     })),
+    totalScheduledRevenue: dataset.totalScheduledRevenue,
     recentContacts,
   };
 }

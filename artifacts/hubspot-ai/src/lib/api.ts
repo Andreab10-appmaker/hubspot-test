@@ -36,6 +36,9 @@ export interface DashboardSummary {
     count: number;
     value: number;
   }>;
+  // Fatturato canonico per anno (revenue spreading) — stessa fonte di Excel e AI.
+  revenueByYear?: Array<{ year: number; value: number }>;
+  totalScheduledRevenue?: number;
   recentContacts: Array<{
     id: string;
     name: string;
