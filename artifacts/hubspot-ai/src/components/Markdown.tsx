@@ -179,17 +179,42 @@ export default function Markdown({ content }: { content: string }) {
       continue;
     }
 
-    // lista ordinata
+    // lista ordinata (con eventuali sotto-voci indentate, es. "  - Owner: ...")
     if (/^\s*\d+\.\s+/.test(line)) {
-      const items: string[] = [];
-      while (i < lines.length && /^\s*\d+\.\s+/.test(lines[i])) {
-        items.push(lines[i].replace(/^\s*\d+\.\s+/, ""));
-        i++;
+      const baseIndent = (/^(\s*)/.exec(line) as RegExpExecArray)[1].length;
+      const startNum = parseInt(line.trim(), 10);
+      const items: Array<{ main: string; subs: string[] }> = [];
+      while (i < lines.length && lines[i].trim()) {
+        const cur = lines[i];
+        const indent = (/^(\s*)/.exec(cur) as RegExpExecArray)[1].length;
+        const om = /^\s*\d+\.\s+(.*)$/.exec(cur);
+        if (om && indent <= baseIndent + 1) {
+          items.push({ main: om[1], subs: [] });
+          i++;
+          continue;
+        }
+        // riga più indentata → sotto-voce della voce numerata corrente
+        if (indent > baseIndent && items.length) {
+          items[items.length - 1].subs.push(cur.replace(/^\s*(?:[-*+]\s+)?/, ""));
+          i++;
+          continue;
+        }
+        break;
       }
+      // `start` preserva la numerazione anche se il blocco viene spezzato.
       blocks.push(
-        <ol key={k()}>
+        <ol key={k()} start={Number.isFinite(startNum) ? startNum : 1}>
           {items.map((it, ii) => (
-            <li key={ii}>{renderInline(it, k())}</li>
+            <li key={ii}>
+              {renderInline(it.main, k())}
+              {it.subs.length > 0 && (
+                <ul>
+                  {it.subs.map((s, si) => (
+                    <li key={si}>{renderInline(s, k())}</li>
+                  ))}
+                </ul>
+              )}
+            </li>
           ))}
         </ol>,
       );

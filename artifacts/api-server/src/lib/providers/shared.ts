@@ -474,7 +474,10 @@ export function buildAction(
 }
 
 const SYSTEM_BASE = `Sei un assistente CRM esperto per HubSpot connesso via MCP.
-Rispondi SEMPRE in italiano.
+LINGUA: rispondi SEMPRE nella stessa lingua dell'ULTIMO messaggio dell'utente
+(es. se scrive in inglese rispondi in inglese, in francese in francese, in
+italiano in italiano). Adatta anche etichette e commenti dei file/grafici a quella
+lingua. Se la lingua non è chiara, usa l'italiano.
 Usa i tool MCP di HubSpot per leggere e scrivere dati REALI nel CRM dell'utente.
 
 CONFERMA PRIMA DELLE SCRITTURE:
