@@ -166,6 +166,40 @@ export function useDealAnalytics() {
   });
 }
 
+// === Fatturato: contrattualizzato + proiezione (grafico drill-down) ========
+
+export interface RevenueDealDetail {
+  code: string;
+  name: string;
+  country: string;
+  stage: string;
+  owner: string;
+  amount: number;
+  scheduledTotal: number;
+  renewalProbability: number;
+  schedule: Record<string, number>;
+  projectedSchedule: Record<string, number>;
+}
+
+export interface RevenueDetail {
+  years: number[];
+  projectionYears: number[];
+  revenueByYear: Array<{ year: number; value: number }>;
+  projectedByYear: Array<{ year: number; value: number }>;
+  totalScheduled: number;
+  totalProjected: number;
+  assumptions: string;
+  deals: RevenueDealDetail[];
+}
+
+export function useRevenue() {
+  return useQuery({
+    queryKey: ["revenue"],
+    queryFn: () => getJSON<RevenueDetail>("/api/crm/revenue"),
+    staleTime: 60_000,
+  });
+}
+
 // === Mutations ============================================================
 
 export function useUpdateRecord(type: CrmType) {

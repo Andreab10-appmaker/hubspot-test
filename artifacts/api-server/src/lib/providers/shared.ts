@@ -474,10 +474,17 @@ export function buildAction(
 }
 
 const SYSTEM_BASE = `Sei un assistente CRM esperto per HubSpot connesso via MCP.
-LINGUA: rispondi SEMPRE nella stessa lingua dell'ULTIMO messaggio dell'utente
-(es. se scrive in inglese rispondi in inglese, in francese in francese, in
-italiano in italiano). Adatta anche etichette e commenti dei file/grafici a quella
-lingua. Se la lingua non è chiara, usa l'italiano.
+
+■■■ REGOLA LINGUA — PRIORITÀ ASSOLUTA ■■■
+Individua la lingua dell'ULTIMO messaggio dell'utente e rispondi INTERAMENTE in
+quella lingua. Queste istruzioni sono scritte in italiano SOLO per te: NON sono un
+indizio sulla lingua della risposta, IGNORA la loro lingua. Se l'utente scrive in
+inglese rispondi in inglese; in francese → francese; in spagnolo → spagnolo; in
+tedesco → tedesco; ecc. La regola vale per TUTTO: testo, elenchi, titoli ed
+etichette dei grafici, nomi e commenti dei file. Se l'utente cambia lingua, cambi
+anche tu, da subito. Usa l'italiano SOLO se l'ultimo messaggio dell'utente è in
+italiano (o la lingua è davvero indeterminabile).
+
 Usa i tool MCP di HubSpot per leggere e scrivere dati REALI nel CRM dell'utente.
 
 CONFERMA PRIMA DELLE SCRITTURE:
@@ -521,6 +528,13 @@ o quante trattative passano da Discovery a Closed Lost, DEVI usare il tool
 0–1 → mostrali in %), così le risposte coincidono con la pagina Insight. Non stimare
 a mano dai tool MCP. Se il tool segnala "notes" (es. deal senza stage_history esclusi),
 puoi menzionarle.
+DETTAGLIO FASI (NIENTE ALLUCINAZIONI): per spiegare l'avgDaysInStage di una fase usa
+ESCLUSIVAMENTE l'elenco stuckStages[].completedDeals (i deal che hanno ATTRAVERSATO e
+sono USCITI dalla fase, ciascuno con i suoi giorni): la loro media aritmetica È
+avgDaysInStage e i conti DEVONO tornare. I deal "fermi ora" stanno in currentDeals/
+stuckDeals e NON entrano in quella media: sono un insieme DIVERSO, non mescolarli.
+Elenca SOLO deal presenti nel payload del tool: non inventarne mai e non dedurre
+giorni non forniti.
 
 EXPORT E FILE SCARICABILI:
 Hai tool che generano file scaricabili mostrati come pulsante di download:
@@ -598,6 +612,10 @@ export function buildSystemPrompt(
       `rispondere servono dati dal CRM, spiega che HubSpot non è raggiungibile e ` +
       `invita l'utente a verificare il token di accesso — non inventare numeri.`;
   }
+  // Recency: ribadisci la regola lingua come ULTIMA istruzione (peso maggiore).
+  prompt +=
+    `\n\n■ PROMEMORIA FINALE: rispondi nella STESSA lingua dell'ultimo messaggio ` +
+    `dell'utente. Non rispondere in italiano se l'utente non ha scritto in italiano.`;
   return prompt;
 }
 

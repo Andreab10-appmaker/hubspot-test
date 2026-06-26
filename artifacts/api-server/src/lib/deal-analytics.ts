@@ -97,6 +97,11 @@ export interface StuckStage {
   completedTransitions: number;
   currentlyInStage: number;
   currentlyStuck: number;
+  /** Deal che hanno ATTRAVERSATO e SONO USCITI dalla fase (base dell'avgDaysInStage). */
+  completedDeals: Array<{ code: string; name: string; days: number }>;
+  /** Deal ATTUALMENTE nella fase (aperti), con i giorni di permanenza finora. */
+  currentDeals: Array<{ code: string; name: string; daysInStage: number }>;
+  /** Sottoinsieme di currentDeals oltre la soglia di "bloccato". */
   stuckDeals: Array<{ code: string; name: string; owner: string; daysInStage: number }>;
 }
 export interface InactiveDeal {
@@ -219,13 +224,19 @@ export function computeDealAnalytics(
     .sort((a, b) => b.deals - a.deals);
 
   // 2) Fasi dove i deal si bloccano ------------------------------------------
-  const stageCompleted = new Map<string, number[]>(); // durate completate per fase
+  type Completed = { code: string; name: string; days: number };
+  const stageCompleted = new Map<string, Completed[]>(); // durate completate per fase (con deal)
   const stageCurrent = new Map<string, PipelineDatasetDeal[]>(); // deal aperti ora in fase
   for (const d of deals) {
     for (const e of d.stageHistory) {
       if (isClosedStage(e.stage) || !e.exitedAt) continue;
       const dur = daysBetween(e.enteredAt, e.exitedAt);
-      if (dur != null && dur >= 0) (stageCompleted.get(e.stage) ?? stageCompleted.set(e.stage, []).get(e.stage)!).push(dur);
+      if (dur != null && dur >= 0)
+        (stageCompleted.get(e.stage) ?? stageCompleted.set(e.stage, []).get(e.stage)!).push({
+          code: d.code,
+          name: d.name,
+          days: dur,
+        });
     }
     const cur = currentOpenStage(d.stageHistory);
     if (cur) (stageCurrent.get(cur.stage) ?? stageCurrent.set(cur.stage, []).get(cur.stage)!).push(d);
@@ -233,22 +244,27 @@ export function computeDealAnalytics(
   const allStages = new Set<string>([...stageCompleted.keys(), ...stageCurrent.keys()]);
   const stuckStages: StuckStage[] = [...allStages]
     .map((stage) => {
-      const completed = stageCompleted.get(stage) ?? [];
-      const current = stageCurrent.get(stage) ?? [];
-      const stuckDeals = current
+      const completed = (stageCompleted.get(stage) ?? []).sort((a, b) => b.days - a.days);
+      const currentDeals = (stageCurrent.get(stage) ?? [])
         .map((d) => {
           const e = currentOpenStage(d.stageHistory)!;
-          const days = daysBetween(e.enteredAt, now) ?? 0;
-          return { code: d.code, name: d.name, owner: d.owner, daysInStage: days };
+          return {
+            code: d.code,
+            name: d.name,
+            owner: d.owner,
+            daysInStage: daysBetween(e.enteredAt, now) ?? 0,
+          };
         })
-        .filter((x) => x.daysInStage >= stuckDays)
         .sort((a, b) => b.daysInStage - a.daysInStage);
+      const stuckDeals = currentDeals.filter((x) => x.daysInStage >= stuckDays);
       return {
         stage,
-        avgDaysInStage: avg(completed),
+        avgDaysInStage: avg(completed.map((c) => c.days)),
         completedTransitions: completed.length,
-        currentlyInStage: current.length,
+        currentlyInStage: currentDeals.length,
         currentlyStuck: stuckDeals.length,
+        completedDeals: completed,
+        currentDeals: currentDeals.map(({ code, name, daysInStage }) => ({ code, name, daysInStage })),
         stuckDeals,
       };
     })

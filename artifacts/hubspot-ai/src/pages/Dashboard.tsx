@@ -13,6 +13,7 @@ import type { ChartSpec } from "@/lib/types";
 import StatCard from "@/components/StatCard";
 import ExportButton from "@/components/ExportButton";
 import ChartView from "@/components/ChartView";
+import RevenueChart from "@/components/RevenueChart";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export default function Dashboard() {
@@ -29,28 +30,6 @@ export default function Dashboard() {
           .map((s) => ({ label: s.stageLabel, value: s.value })),
       }
     : null;
-
-  // Fatturato per anno (revenue spreading): STESSA fonte dell'Excel e dell'AI.
-  // Include la PROIEZIONE oltre la durata dei contratti (anni successivi, stima).
-  const revenueChart: ChartSpec | null =
-    data && data.revenueByYear && data.revenueByYear.length > 0
-      ? {
-          id: "revenue-by-year",
-          type: "bar",
-          title: "Fatturato per anno — contrattualizzato + proiezione",
-          valueFormat: "currency",
-          data: [
-            ...data.revenueByYear.map((r) => ({
-              label: String(r.year),
-              value: r.value,
-            })),
-            ...(data.projectedByYear ?? []).map((r) => ({
-              label: `${r.year} (proiez.)`,
-              value: r.value,
-            })),
-          ],
-        }
-      : null;
 
   return (
     <div className="space-y-5">
@@ -124,6 +103,9 @@ export default function Dashboard() {
         />
       </div>
 
+      {/* Fatturato: contrattualizzato + proiezione, con drill-down per anno */}
+      <RevenueChart />
+
       {/* Chart + recent */}
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="space-y-4 lg:col-span-2">
@@ -138,11 +120,6 @@ export default function Dashboard() {
               </div>
             )}
           </div>
-          {!isLoading && revenueChart && revenueChart.data.length > 0 && (
-            <div className="rounded-2xl border border-card-border bg-card p-4 shadow-xs">
-              <ChartView spec={revenueChart} />
-            </div>
-          )}
         </div>
 
         <div className="rounded-2xl border border-card-border bg-card p-4 shadow-xs">
