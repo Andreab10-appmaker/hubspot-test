@@ -37,7 +37,48 @@ export const PIPELINE_DEAL_PROPS = [
   "contract_type",
   "kpmg_note",
   "revenue_schedule",
+  // Campi per le analisi del funnel (vedi lib/deal-analytics.ts) e la proiezione.
+  "deal_source",
+  "deal_country",
+  "last_activity_date",
+  "stage_history",
+  "renewal_probability",
 ];
+
+/** Una tappa nello storico delle fasi del deal. */
+export interface StageHistoryEntry {
+  stage: string; // label parlante della fase (es. "Discovery call")
+  enteredAt: string; // ISO date di ingresso
+  exitedAt: string | null; // ISO date di uscita; null = fase corrente
+}
+
+/**
+ * Interpreta `stage_history`: JSON array ordinato di tappe
+ * [{ "stage": "...", "enteredAt": "YYYY-MM-DD", "exitedAt": "YYYY-MM-DD"|null }].
+ * Tollerante: scarta le tappe malformate, ordina per enteredAt.
+ */
+export function parseStageHistory(
+  raw: string | null | undefined,
+): StageHistoryEntry[] {
+  if (!raw) return [];
+  try {
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr)) return [];
+    const out: StageHistoryEntry[] = [];
+    for (const it of arr) {
+      const o = it as Record<string, unknown>;
+      const stage = typeof o.stage === "string" ? o.stage : "";
+      const enteredAt = typeof o.enteredAt === "string" ? o.enteredAt.slice(0, 10) : "";
+      if (!stage || !enteredAt) continue;
+      const exitedAt =
+        typeof o.exitedAt === "string" && o.exitedAt ? o.exitedAt.slice(0, 10) : null;
+      out.push({ stage, enteredAt, exitedAt });
+    }
+    return out.sort((a, b) => a.enteredAt.localeCompare(b.enteredAt));
+  } catch {
+    return [];
+  }
+}
 
 export type ScheduleSource =
   | "schedule"
@@ -126,6 +167,32 @@ function fallbackSchedule(
   return { schedule: {}, source: "none" };
 }
 
+/**
+ * Proietta il fatturato OLTRE la fine del contratto. Prende il run-rate annuo
+ * (massimo valore anno-pieno dello schedule) e lo replica per PROJECTION_YEARS
+ * anni dopo l'ultimo anno schedulato, scontato per la probabilità di rinnovo.
+ * Restituisce { anno → importo proiettato } (vuoto se prob. = 0 o no schedule).
+ */
+export function projectBeyondContract(
+  schedule: Record<string, number>,
+  renewalProbability: number,
+): Record<string, number> {
+  const years = Object.keys(schedule)
+    .map((y) => Number(y))
+    .filter((y) => Number.isFinite(y))
+    .sort((a, b) => a - b);
+  if (years.length === 0 || renewalProbability <= 0) return {};
+  // Run-rate = massimo valore annuo (l'anno pieno; ignora le code parziali).
+  const runRate = Math.max(...years.map((y) => schedule[String(y)] || 0));
+  if (runRate <= 0) return {};
+  const lastYear = years[years.length - 1];
+  const out: Record<string, number> = {};
+  for (let k = 1; k <= PROJECTION_YEARS; k++) {
+    out[String(lastYear + k)] = Math.round(runRate * renewalProbability);
+  }
+  return out;
+}
+
 /** Classifica la fase deal (per il foglio Cash Flow e per won/open). */
 export function stageKind(label: string): RevenueDeal["stageKind"] {
   const l = label.toLowerCase();
@@ -143,11 +210,26 @@ function isClosedLabel(label: string): boolean {
   return /closed(\s*(won|lost))?|won|lost/i.test(label);
 }
 
+// Orizzonte (anni) della proiezione del fatturato OLTRE la fine del contratto.
+export const PROJECTION_YEARS = 3;
+
 export interface PipelineDatasetDeal extends RevenueDeal {
   /** Origine dello split (per diagnostica e per spiegare i criteri all'utente). */
   scheduleSource: ScheduleSource;
   /** Somma dello schedule (fatturato pluriennale totale del deal). */
   scheduledTotal: number;
+  /** Sorgente del deal (deal_source), es. "Inbound". Vuota se non impostata. */
+  source: string;
+  /** Paese del deal (deal_country), es. "Italia". Vuoto se non impostato. */
+  country: string;
+  /** Data ultima attività (last_activity_date, ISO) o "" se assente. */
+  lastActivityDate: string;
+  /** Storico ordinato delle fasi attraversate dal deal. */
+  stageHistory: StageHistoryEntry[];
+  /** Probabilità di rinnovo (0–1) usata per la proiezione oltre il contratto. */
+  renewalProbability: number;
+  /** Fatturato PROIETTATO per anno oltre la fine del contratto (anno→importo). */
+  projectedSchedule: Record<string, number>;
 }
 
 export interface PipelineDataset {
@@ -160,6 +242,12 @@ export interface PipelineDataset {
   totalScheduledRevenue: number;
   /** Somma dei valori nominali (`amount`) dei deal. */
   totalContractValue: number;
+  /** Fatturato PROIETTATO per anno oltre la durata dei contratti (anno→importo). */
+  projectedByYear: Record<number, number>;
+  /** Anni della proiezione (oltre `years`), ordinati. */
+  projectionYears: number[];
+  /** Spiegazione della metodologia di proiezione (per UI e assistente). */
+  projectionAssumptions: string;
   byStage: Array<{
     stage: string;
     stageLabel: string;
@@ -219,6 +307,24 @@ export function computePipelineDataset(
 
       const scheduledTotal = Object.values(schedule).reduce((a, b) => a + b, 0);
       const code = p.deal_code || rec.id;
+      const typeLabel = typeMap.get(p.contract_type || "") || p.contract_type || "";
+
+      // Probabilità di rinnovo: campo esplicito, altrimenti default (gli "spot"/
+      // mono-anno non rinnovano → 0; gli altri 0.6).
+      const defaultRenewal =
+        durationYears <= 1 || /spot/i.test(typeLabel) ? 0 : 0.6;
+      const renewalRaw = p.renewal_probability;
+      const rp = Number(renewalRaw);
+      const renewalProbability =
+        renewalRaw != null && renewalRaw !== "" && Number.isFinite(rp)
+          ? Math.min(1, Math.max(0, rp))
+          : defaultRenewal;
+
+      // Proiezione: i deal persi non generano fatturato futuro.
+      const isLost = /lost/i.test(stageLabel);
+      const projectedSchedule = isLost
+        ? {}
+        : projectBeyondContract(schedule, renewalProbability);
 
       // Diagnostica frizioni: schedule che non riconcilia con l'importo nominale.
       if (source === "schedule" && amount > 0) {
@@ -247,12 +353,18 @@ export function computePipelineDataset(
         contractStart,
         amount,
         durationYears,
-        typeLabel: typeMap.get(p.contract_type || "") || p.contract_type || "",
+        typeLabel,
         kpmgNote: p.kpmg_note || "",
         schedule,
         stageKind: stageKind(stageLabel),
         scheduleSource: source,
         scheduledTotal,
+        source: p.deal_source || "",
+        country: p.deal_country || "",
+        lastActivityDate: isoDate(p.last_activity_date),
+        stageHistory: parseStageHistory(p.stage_history),
+        renewalProbability,
+        projectedSchedule,
       } satisfies PipelineDatasetDeal;
     })
     .sort((a, b) => a.code.localeCompare(b.code));
@@ -273,6 +385,24 @@ export function computePipelineDataset(
     0,
   );
   const totalContractValue = deals.reduce((a, d) => a + d.amount, 0);
+
+  // Fatturato proiettato per anno (oltre la durata dei contratti).
+  const projectedByYear: Record<number, number> = {};
+  for (const d of deals) {
+    for (const [y, v] of Object.entries(d.projectedSchedule)) {
+      const yr = Number(y);
+      projectedByYear[yr] = (projectedByYear[yr] || 0) + v;
+    }
+  }
+  const projectionYears = Object.keys(projectedByYear)
+    .map((y) => Number(y))
+    .sort((a, b) => a - b);
+  const projectionAssumptions =
+    `Proiezione oltre la durata del contratto: il run-rate annuo (anno pieno) di ogni ` +
+    `deal viene replicato per ${PROJECTION_YEARS} anni dopo la fine dello schedule, ` +
+    `moltiplicato per la probabilità di rinnovo del deal (renewal_probability; gli ` +
+    `spot/mono-anno = 0). I deal persi sono esclusi. È una STIMA, distinta dal ` +
+    `fatturato contrattualizzato (revenueByYear).`;
 
   // Aggregati per fase + won/open (label parlanti).
   const byStageMap = new Map<
@@ -323,6 +453,9 @@ export function computePipelineDataset(
     revenueByYear,
     totalScheduledRevenue,
     totalContractValue,
+    projectedByYear,
+    projectionYears,
+    projectionAssumptions,
     byStage,
     won,
     open,

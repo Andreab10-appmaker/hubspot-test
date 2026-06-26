@@ -240,3 +240,5 @@ main().catch((err) => {
   console.error("\n❌ Errore:", err instanceof Error ? err.message : err);
   process.exit(1);
 });
+
+export {};

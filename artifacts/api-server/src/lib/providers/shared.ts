@@ -6,6 +6,7 @@ import {
 } from "../pipeline-export.js";
 import { generateRevenueSpreading } from "../revenue-spreading.js";
 import { buildPipelineDataset } from "../pipeline-dataset.js";
+import { buildDealAnalytics } from "../deal-analytics.js";
 import { generateCsv, type CsvSpec } from "../csv.js";
 import { generatePdf, type PdfSpec } from "../pdf.js";
 import { generatePptx, type PptxSpec } from "../pptx.js";
@@ -32,6 +33,7 @@ export const EXCEL_TOOL_NAME = "create_excel";
 export const PIPELINE_EXPORT_TOOL_NAME = "create_pipeline_export";
 export const REVENUE_SPREADING_TOOL_NAME = "create_revenue_spreading";
 export const PIPELINE_DATASET_TOOL_NAME = "get_pipeline_dataset";
+export const DEAL_ANALYTICS_TOOL_NAME = "get_deal_analytics";
 export const CSV_TOOL_NAME = "create_csv";
 export const PDF_TOOL_NAME = "create_pdf";
 export const PPTX_TOOL_NAME = "create_pptx";
@@ -234,6 +236,22 @@ export const PIPELINE_DATASET_TOOL: NormalizedTool = {
     "tua suddivisione. I numeri che riporti all'utente DEVONO essere questi, così " +
     "coincidono con l'Excel scaricabile. Lo split per anno = campo revenue_schedule " +
     "del deal (con fallback deterministico se assente).",
+  inputSchema: { type: "object", properties: {} },
+};
+
+export const DEAL_ANALYTICS_TOOL: NormalizedTool = {
+  name: DEAL_ANALYTICS_TOOL_NAME,
+  description:
+    "Analisi del FUNNEL deal, calcolata dal server in modo deterministico (stessi " +
+    "numeri della pagina Insight dell'interfaccia). USA SEMPRE questo tool per " +
+    "domande su: velocità di avanzamento nel funnel per SORGENTE del deal; in quali " +
+    "FASI i deal si BLOCCANO (tempo medio per fase e deal fermi); deal SENZA ATTIVITÀ " +
+    "da N giorni/settimane; CICLO DI VENDITA medio per fascia di VALORE; WIN RATE per " +
+    "PAESE; TRANSIZIONI di fase incl. quante trattative passano da Discovery call " +
+    "direttamente a Closed Lost. Restituisce funnelVelocityBySource, stuckStages, " +
+    "inactiveDeals, salesCycleByValue, winRateByCountry e stageTransitions. NON " +
+    "calcolare queste metriche a mano dai tool MCP: usa SOLO questi numeri, così le " +
+    "tue risposte coincidono con l'interfaccia. Tempi in giorni, win rate 0–1.",
   inputSchema: { type: "object", properties: {} },
 };
 
@@ -488,6 +506,18 @@ che non somma all'amount), puoi menzionarli.
 Quando l'utente vuole SCARICARE/esportare la pipeline o il revenue spreading, usa
 "create_revenue_spreading" (genera lo stesso file del pulsante dell'interfaccia):
 NON costruirlo a mano con create_excel.
+Il dataset include anche "projectedRevenueByYear": il fatturato STIMATO oltre la
+durata dei contratti (rinnovi). Tienilo distinto dal fatturato contrattualizzato e,
+se lo citi, spiega che è una proiezione (vedi projectionAssumptions).
+
+ANALISI DEL FUNNEL (REGOLA FERREA):
+Per domande su velocità nel funnel per sorgente, fasi dove i deal si bloccano, deal
+senza attività da X settimane, ciclo di vendita medio per valore, win rate per paese,
+o quante trattative passano da Discovery a Closed Lost, DEVI usare il tool
+"get_deal_analytics". Riporta ESATTAMENTE i suoi numeri (tempi in giorni, win rate in
+0–1 → mostrali in %), così le risposte coincidono con la pagina Insight. Non stimare
+a mano dai tool MCP. Se il tool segnala "notes" (es. deal senza stage_history esclusi),
+puoi menzionarle.
 
 EXPORT E FILE SCARICABILI:
 Hai tool che generano file scaricabili mostrati come pulsante di download:
@@ -671,6 +701,12 @@ export async function executeTool(
           year,
           value: ds.revenueByYear[year] || 0,
         })),
+        // Proiezione del fatturato OLTRE la durata dei contratti (stima).
+        projectedRevenueByYear: ds.projectionYears.map((year) => ({
+          year,
+          value: ds.projectedByYear[year] || 0,
+        })),
+        projectionAssumptions: ds.projectionAssumptions,
         byStage: ds.byStage,
         deals: ds.deals.map((d) => ({
           code: d.code,
@@ -693,6 +729,20 @@ export async function executeTool(
       logger.error({ err, tool: name }, "[tool] get_pipeline_dataset fallito");
       return {
         content: `Errore lettura dataset pipeline: ${String(err)}`,
+        isError: true,
+      };
+    }
+  }
+
+  if (name === DEAL_ANALYTICS_TOOL_NAME) {
+    logger.info({ tool: name }, "[tool] get_deal_analytics invocato");
+    try {
+      const analytics = await buildDealAnalytics();
+      return { content: JSON.stringify(analytics), isError: false };
+    } catch (err) {
+      logger.error({ err, tool: name }, "[tool] get_deal_analytics fallito");
+      return {
+        content: `Errore lettura analisi funnel: ${String(err)}`,
         isError: true,
       };
     }

@@ -39,6 +39,8 @@ export interface DashboardSummary {
   // Fatturato canonico per anno (revenue spreading) — stessa fonte di Excel e AI.
   revenueByYear?: Array<{ year: number; value: number }>;
   totalScheduledRevenue?: number;
+  // Fatturato proiettato oltre la durata dei contratti (stima rinnovi).
+  projectedByYear?: Array<{ year: number; value: number }>;
   recentContacts: Array<{
     id: string;
     name: string;
@@ -99,6 +101,68 @@ export function useDashboard() {
     queryKey: ["dashboard"],
     queryFn: () => getJSON<DashboardSummary>("/api/crm/dashboard/summary"),
     staleTime: 30_000,
+  });
+}
+
+// === Analisi funnel (pagina Insight) ======================================
+
+export interface DealAnalytics {
+  generatedAt: string;
+  totals: { deals: number; closed: number; won: number; lost: number; open: number };
+  funnelVelocityBySource: Array<{
+    source: string;
+    deals: number;
+    avgDaysToClose: number | null;
+    stages: Array<{ stage: string; avgDays: number; count: number }>;
+  }>;
+  stuckStages: Array<{
+    stage: string;
+    avgDaysInStage: number;
+    completedTransitions: number;
+    currentlyInStage: number;
+    currentlyStuck: number;
+    stuckDeals: Array<{ code: string; name: string; owner: string; daysInStage: number }>;
+  }>;
+  inactiveDeals: {
+    thresholdDays: number;
+    count: number;
+    deals: Array<{
+      code: string;
+      name: string;
+      owner: string;
+      stage: string;
+      amount: number;
+      lastActivityDate: string;
+      daysSinceActivity: number;
+    }>;
+  };
+  salesCycleByValue: {
+    buckets: Array<{ bucket: string; label: string; avgCycleDays: number; count: number }>;
+    overallAvgDays: number;
+  };
+  winRateByCountry: {
+    countries: Array<{
+      country: string;
+      won: number;
+      lost: number;
+      open: number;
+      decided: number;
+      winRate: number | null;
+    }>;
+    overallWinRate: number | null;
+  };
+  stageTransitions: {
+    transitions: Array<{ from: string; to: string; count: number }>;
+    discoveryToClosedLost: { count: number; deals: Array<{ code: string; name: string }> };
+  };
+  notes: string[];
+}
+
+export function useDealAnalytics() {
+  return useQuery({
+    queryKey: ["deal-analytics"],
+    queryFn: () => getJSON<DealAnalytics>("/api/crm/analytics"),
+    staleTime: 60_000,
   });
 }
 

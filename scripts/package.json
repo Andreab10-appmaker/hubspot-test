@@ -6,6 +6,8 @@
   "scripts": {
     "hello": "tsx ./src/hello.ts",
     "setup:pipeline": "tsx ./src/setup-pipeline.ts",
+    "setup:deal-fields": "tsx ./src/setup-deal-fields.ts",
+    "seed:deals": "tsx ./src/seed-deals.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {

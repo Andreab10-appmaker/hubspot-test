@@ -109,6 +109,12 @@ export const DEFAULT_PROPERTIES: Record<CrmObjectType, string[]> = {
     "contract_type",
     "kpmg_note",
     "revenue_schedule",
+    // Campi custom per le analisi del funnel (pagina Insight + assistente AI)
+    "deal_source",
+    "deal_country",
+    "last_activity_date",
+    "stage_history",
+    "renewal_probability",
   ],
 };
 
@@ -389,6 +395,8 @@ export interface DashboardSummary {
   // Fatturato canonico per anno (revenue spreading) — stessa fonte di Excel e AI.
   revenueByYear: Array<{ year: number; value: number }>;
   totalScheduledRevenue: number;
+  // Fatturato proiettato oltre la durata dei contratti (stima rinnovi).
+  projectedByYear: Array<{ year: number; value: number }>;
   recentContacts: Array<{
     id: string;
     name: string;
@@ -444,6 +452,10 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
       value: dataset.revenueByYear[year] || 0,
     })),
     totalScheduledRevenue: dataset.totalScheduledRevenue,
+    projectedByYear: dataset.projectionYears.map((year) => ({
+      year,
+      value: dataset.projectedByYear[year] || 0,
+    })),
     recentContacts,
   };
 }

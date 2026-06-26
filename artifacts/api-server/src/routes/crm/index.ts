@@ -8,6 +8,7 @@ import {
   getDashboardSummary,
   getPropertyOptions,
 } from "../../lib/hubspot-crm.js";
+import { buildDealAnalytics } from "../../lib/deal-analytics.js";
 
 const router = Router();
 
@@ -26,6 +27,17 @@ function fail(res: import("express").Response, err: unknown) {
 router.get("/dashboard/summary", async (_req, res) => {
   try {
     res.json(await getDashboardSummary());
+  } catch (err) {
+    fail(res, err);
+  }
+});
+
+// GET /api/crm/analytics — analisi del funnel (velocità per sorgente, fasi
+// bloccate, deal inattivi, ciclo di vendita per valore, win rate per paese,
+// transizioni di fase). Stessa fonte usata dall'assistente AI (get_deal_analytics).
+router.get("/analytics", async (_req, res) => {
+  try {
+    res.json(await buildDealAnalytics());
   } catch (err) {
     fail(res, err);
   }

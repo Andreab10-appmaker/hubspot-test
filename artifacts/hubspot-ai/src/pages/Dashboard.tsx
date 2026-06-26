@@ -31,17 +31,24 @@ export default function Dashboard() {
     : null;
 
   // Fatturato per anno (revenue spreading): STESSA fonte dell'Excel e dell'AI.
+  // Include la PROIEZIONE oltre la durata dei contratti (anni successivi, stima).
   const revenueChart: ChartSpec | null =
     data && data.revenueByYear && data.revenueByYear.length > 0
       ? {
           id: "revenue-by-year",
           type: "bar",
-          title: "Fatturato per anno (revenue spreading)",
+          title: "Fatturato per anno — contrattualizzato + proiezione",
           valueFormat: "currency",
-          data: data.revenueByYear.map((r) => ({
-            label: String(r.year),
-            value: r.value,
-          })),
+          data: [
+            ...data.revenueByYear.map((r) => ({
+              label: String(r.year),
+              value: r.value,
+            })),
+            ...(data.projectedByYear ?? []).map((r) => ({
+              label: `${r.year} (proiez.)`,
+              value: r.value,
+            })),
+          ],
         }
       : null;
 
