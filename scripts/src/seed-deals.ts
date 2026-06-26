@@ -161,7 +161,7 @@ function propsFor(spec: Spec, stageIds: Map<string, string>): Record<string, str
   const stageId = stageIds.get(stageLabel.trim().toLowerCase());
   if (!stageId) throw new Error(`Fase non trovata in pipeline: "${stageLabel}" (${spec.code})`);
   const isOpenLast = spec.history[spec.history.length - 1][1] === null && ![WON, LOST].includes(stageLabel);
-  return {
+  const props: Record<string, string> = {
     deal_code: spec.code,
     dealname: spec.name,
     contract_owner: spec.owner,
@@ -174,10 +174,12 @@ function propsFor(spec: Spec, stageIds: Map<string, string>): Record<string, str
     revenue_schedule: JSON.stringify(spec.schedule),
     stage_history: json,
     last_activity_date: daysAgo(spec.lastActivityDaysAgo),
-    renewal_probability: String(spec.renewal ?? ""),
     // closedate: per i chiusi è la data di chiusura; per gli aperti una stima.
     closedate: isOpenLast ? addDays(closeDate, 60) : closeDate,
   };
+  // renewal_probability solo se definita: un numero vuoto fa fallire la POST.
+  if (spec.renewal != null) props.renewal_probability = String(spec.renewal);
+  return props;
 }
 
 async function upsert(
