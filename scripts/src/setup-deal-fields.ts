@@ -51,11 +51,13 @@ const DESIRED: PropDef[] = [
     options: opts("Italia", "Francia", "Spagna", "Germania", "Svizzera", "UK"),
   },
   {
+    // La label NON può essere "Last Activity Date": è già usata dalla proprietà
+    // standard HubSpot `notes_last_updated` (le label devono essere uniche).
     name: "last_activity_date",
-    label: "Last Activity Date",
+    label: "Deal Last Activity Date",
     type: "date",
     fieldType: "date",
-    description: "Data dell'ultima attività registrata sul deal.",
+    description: "Data dell'ultima attività registrata sul deal (per analisi deal inattivi).",
   },
   {
     name: "stage_history",
@@ -124,20 +126,35 @@ async function main(): Promise<void> {
   const dryRun = process.env.DRY_RUN === "1" || process.env.DRY_RUN === "true";
   console.log(`🔧 Configuro ${DESIRED.length} proprietà custom sui deal...\n`);
 
+  // Creazione RESILIENTE: un errore su un campo non blocca gli altri.
+  const failures: string[] = [];
   for (const def of DESIRED) {
-    const exists = await propertyExists(token, def.name);
-    if (exists) {
-      console.log(`   • ${def.name} — già presente, salto.`);
-      continue;
+    try {
+      const exists = await propertyExists(token, def.name);
+      if (exists) {
+        console.log(`   • ${def.name} — già presente, salto.`);
+        continue;
+      }
+      if (dryRun) {
+        console.log(`   • ${def.name} — DA CREARE (dry-run).`);
+        continue;
+      }
+      await createProperty(token, def);
+      console.log(`   ✅ ${def.name} — creata (${def.type}).`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`   ❌ ${def.name} — ERRORE: ${msg.split("\n")[0]}`);
+      failures.push(def.name);
     }
-    if (dryRun) {
-      console.log(`   • ${def.name} — DA CREARE (dry-run).`);
-      continue;
-    }
-    await createProperty(token, def);
-    console.log(`   ✅ ${def.name} — creata (${def.type}).`);
   }
 
+  if (failures.length) {
+    console.error(
+      `\n❌ ${failures.length} proprietà non create: ${failures.join(", ")}. ` +
+        "Risolvi (es. label duplicata) e rilancia — i campi già creati vengono saltati.",
+    );
+    process.exit(1);
+  }
   console.log(
     dryRun
       ? "\n🟡 DRY_RUN: nessuna modifica inviata."
