@@ -9,27 +9,13 @@ import {
 } from "lucide-react";
 import { useDashboard } from "@/lib/api";
 import { formatCurrencyCompact, relativeDate, initials, colorFromString, textColorFromString } from "@/lib/format";
-import type { ChartSpec } from "@/lib/types";
 import StatCard from "@/components/StatCard";
 import ExportButton from "@/components/ExportButton";
-import ChartView from "@/components/ChartView";
 import RevenueChart from "@/components/RevenueChart";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export default function Dashboard() {
   const { data, isLoading, error } = useDashboard();
-
-  const chart: ChartSpec | null = data
-    ? {
-        id: "pipeline-by-stage",
-        type: "bar",
-        title: "Valore pipeline per fase",
-        valueFormat: "currency",
-        data: data.dealsByStage
-          .filter((s) => s.value > 0)
-          .map((s) => ({ label: s.stageLabel, value: s.value })),
-      }
-    : null;
 
   return (
     <div className="space-y-5">
@@ -106,24 +92,10 @@ export default function Dashboard() {
       {/* Fatturato: contrattualizzato + proiezione, con drill-down per anno */}
       <RevenueChart />
 
-      {/* Chart + recent */}
-      <div className="grid gap-4 lg:grid-cols-3">
-        <div className="space-y-4 lg:col-span-2">
-          <div className="rounded-2xl border border-card-border bg-card p-4 shadow-xs">
-            {isLoading ? (
-              <Skeleton className="h-[260px] w-full" />
-            ) : chart && chart.data.length > 0 ? (
-              <ChartView spec={chart} />
-            ) : (
-              <div className="grid h-[260px] place-items-center text-sm text-muted-foreground">
-                Nessun dato di pipeline da mostrare.
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-card-border bg-card p-4 shadow-xs">
-          <div className="mb-3 flex items-center justify-between">
+      {/* Recent contacts
+          Grafico "Valore pipeline per fase" temporaneamente disattivato su richiesta. */}
+      <div className="rounded-2xl border border-card-border bg-card p-4 shadow-xs">
+        <div className="mb-3 flex items-center justify-between">
             <h2 className="text-[13px] font-bold uppercase tracking-wide text-muted-foreground">
               Contatti recenti
             </h2>
@@ -175,7 +147,6 @@ export default function Dashboard() {
             </ul>
           )}
         </div>
-      </div>
 
       {/* Quick links to mirror views */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
